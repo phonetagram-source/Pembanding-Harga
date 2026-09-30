@@ -8,6 +8,8 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Memuat SheetJS untuk membaca dan mengexport file Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="bg-gray-100 p-6">
     <div id="root"></div>
@@ -15,69 +17,117 @@
     <script type="text/babel">
         const { useState } = React;
 
-        // Data awal (Contoh data base)
         const initialDatabase = [
-            { id: 1, tahun: "24/25", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 11400000 },
-            { id: 2, tahun: "25/26", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 13000000 },
-            { id: 3, tahun: "26/27", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 13700000 },
-            { id: 4, tahun: "24/25", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 10500000 },
-            { id: 5, tahun: "25/26", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 12100000 },
-            { id: 6, tahun: "26/27", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 12900000 },
+            { tahun: "24/25", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 11400000 },
+            { tahun: "25/26", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 13000000 },
+            { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 13700000 },
+            { tahun: "24/25", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 10500000 },
+            { tahun: "25/26", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 12100000 },
+            { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 12900000 },
         ];
 
         function App() {
             const [db, setDb] = useState(initialDatabase);
-            const [activeMenu, setActiveMenu] = useState("input"); // 'input' atau 'pembanding'
-
-            // State Form Input
-            const [tahun, setTahun] = useState("26/27");
-            const [tingkat, setTingkat] = useState("12 SMA");
-            const [produk, setProduk] = useState("TWT 4P");
-            const [kelompok, setKelompok] = useState(1);
-            const [harga, setHarga] = useState("");
-
-            // State Proyeksi Pembanding
+            const [activeMenu, setActiveMenu] = useState("input");
             const [selectedProdComp, setSelectedProdComp] = useState("TWT 4P");
             const [draft27, setDraft27] = useState({});
 
             const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
 
-            // Handler Tambah Data Manual
-            const handleAddData = (e) => {
-                e.preventDefault();
-                if (!harga) return;
-
-                const newItem = {
-                    id: db.length + 1,
-                    tahun,
-                    tingkat,
-                    produk,
-                    kelompok: parseInt(kelompok),
-                    harga: parseInt(harga.replace(/\D/g, '')) || 0
-                };
-
-                setDb([...db, newItem]);
-                setHarga("");
-                alert("Data harga berhasil disimpan ke database!");
+            // 1. Fitur Download Template Excel
+            const handleDownloadTemplate = () => {
+                const templateData = [
+                    { Tahun_Ajaran: "27/28", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 4P", Kelompok_Kota: 1, Harga: 14400000 },
+                    { Tahun_Ajaran: "27/28", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 4P", Kelompok_Kota: 2, Harga: 13700000 }
+                ];
+                const worksheet = XLSX.utils.json_to_sheet(templateData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+                XLSX.writeFile(workbook, "template_database_harga.xlsx");
             };
 
-            // Ambil daftar produk unik untuk dropdown komparasi
+            // 2. Fitur Upload Excel
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const dataBuffer = new Uint8Array(evt.target.result);
+                        const workbook = XLSX.read(dataBuffer, { type: 'array' });
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                        if (jsonData.length === 0) {
+                            alert("File Excel kosong!");
+                            return;
+                        }
+
+                        const formattedData = jsonData.map(row => ({
+                            tahun: String(row.Tahun_Ajaran || row.tahun || row.TA || "26/27"),
+                            tingkat: String(row.Tingkat_Kelas || row.tingkat || "12 SMA"),
+                            produk: String(row.Nama_Produk || row.produk || "Produk Baru"),
+                            kelompok: parseInt(row.Kelompok_Kota || row.kelompok || 1),
+                            harga: parseInt(String(row.Harga || row.harga || 0).replace(/\D/g, '')) || 0
+                        }));
+
+                        setDb(formattedData);
+                        alert(`Berhasil! ${formattedData.length} baris data berhasil di-upload.`);
+                    } catch (error) {
+                        alert("Gagal membaca file Excel. Pastikan format kolom sesuai template.");
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            // 3. Fitur Reset Database
+            const handleResetData = () => {
+                if (confirm("Apakah Anda yakin ingin menghapus SEMUA data di dalam sistem?")) {
+                    setDb([]);
+                    alert("Database berhasil dikosongkan.");
+                }
+            };
+
+            // 4. Fitur Export Pembanding to Excel
+            const handleExportComp = () => {
+                const exportData = [1, 2, 3].map(kel => {
+                    const getVal = (ta) => {
+                        const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
+                        return found ? found.harga : 0;
+                    };
+                    return {
+                        "Kelompok Kota": `Kelompok ${kel}`,
+                        "Produk": selectedProdComp,
+                        "TA 24/25": getVal("24/25"),
+                        "TA 25/26": getVal("25/26"),
+                        "TA 26/27": getVal("26/27"),
+                        "Proyeksi TA 27/28": draft27[kel] || 0
+                    };
+                });
+
+                const worksheet = XLSX.utils.json_to_sheet(exportData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Komparasi Harga");
+                XLSX.writeFile(workbook, `Komparasi_${selectedProdComp.replace(/\s+/g, '_')}.xlsx`);
+            };
+
             const listProdukUnik = [...new Set(db.map(item => item.produk))];
 
             return (
                 <div className="max-w-6xl mx-auto bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
-                    {/* Header Navigasi Utama */}
+                    {/* Header Navigasi */}
                     <div className="bg-slate-900 text-white p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                         <div>
                             <h1 className="text-2xl font-bold">Aplikasi Pengelola & Proyeksi Harga</h1>
-                            <p className="text-sm text-gray-400 mt-1">Kelola database manual dan bandingkan tren harga antar tahun ajaran</p>
+                            <p className="text-sm text-gray-400 mt-1">Sistem manajemen database dan komparasi harga terpadu</p>
                         </div>
                         <div className="flex bg-slate-800 p-1.5 rounded-xl border border-slate-700">
                             <button 
                                 onClick={() => setActiveMenu("input")}
                                 className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeMenu === 'input' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}
                             >
-                                📝 1. Tampilan Input Data
+                                📂 1. Upload & Kelola Database
                             </button>
                             <button 
                                 onClick={() => setActiveMenu("pembanding")}
@@ -88,92 +138,93 @@
                         </div>
                     </div>
 
-                    {/* Konten Berdasarkan Menu Aktif */}
                     <div className="p-8">
                         {activeMenu === 'input' ? (
-                            /* ================= TAMPILAN 1: INPUT DATA ================= */
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                                <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 shadow-sm">
-                                    <h2 className="text-lg font-bold text-gray-800 mb-4">Input / Tambah Data Harga Dasar</h2>
-                                    <form onSubmit={handleAddData} className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Tahun Ajaran</label>
-                                            <input type="text" value={tahun} onChange={(e) => setTahun(e.target.value)} placeholder="Contoh: 24/25, 25/26, 26/27" className="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Tingkat Kelas</label>
-                                            <select value={tingkat} onChange={(e) => setTingkat(e.target.value)} className="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
-                                                <option value="10 SMA">10 SMA</option>
-                                                <option value="11 SMA">11 SMA</option>
-                                                <option value="12 SMA">12 SMA</option>
-                                                <option value="Gapyear">Gapyear</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk</label>
-                                            <input type="text" value={produk} onChange={(e) => setProduk(e.target.value)} placeholder="Contoh: TWT 4P" className="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Kelompok Kota (1 s.d 24)</label>
-                                            <input type="number" min="1" max="24" value={kelompok} onChange={(e) => setKelompok(e.target.value)} className="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Harga (Rp)</label>
-                                            <input type="text" value={harga} onChange={(e) => setHarga(e.target.value)} placeholder="Contoh: 13000000" className="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required />
-                                        </div>
-                                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-md">
-                                            + Simpan ke Database
+                            /* ================= TAMPILAN 1: UPLOAD & KELOLA ================= */
+                            <div className="space-y-6">
+                                <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
+                                    <div>
+                                        <h2 className="text-lg font-bold text-blue-900">Kelola Data Harga Massal</h2>
+                                        <p className="text-sm text-blue-700 mt-1">
+                                            Download template terlebih dahulu, isi datanya, lalu upload kembali ke sistem.
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-3">
+                                        <button onClick={handleDownloadTemplate} className="bg-white border border-blue-300 text-blue-700 hover:bg-blue-100 px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition-colors">
+                                            📥 Download Template
                                         </button>
-                                    </form>
+                                        <label className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md transition-colors text-sm">
+                                            📁 Upload Excel / CSV
+                                            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="hidden" />
+                                        </label>
+                                        {db.length > 0 && (
+                                            <button onClick={handleResetData} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-4 py-2.5 rounded-xl font-bold text-sm transition-colors">
+                                                🗑️ Reset Database
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div>
-                                    <h2 className="text-lg font-bold text-gray-800 mb-4">Daftar Database Tersimpan</h2>
-                                    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm max-h-[500px] overflow-y-auto">
+                                    <h3 className="text-md font-bold text-gray-800 mb-3">Database Aktif di Sistem ({db.length} Baris Data)</h3>
+                                    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm max-h-[450px] overflow-y-auto">
                                         <table className="w-full text-left border-collapse text-sm">
                                             <thead className="bg-gray-100 text-gray-700 sticky top-0">
                                                 <tr>
-                                                    <th className="p-3 border-b">TA</th>
-                                                    <th className="p-3 border-b">Kelas</th>
-                                                    <th className="p-3 border-b">Produk</th>
-                                                    <th className="p-3 border-b">Kelompok</th>
+                                                    <th className="p-3 border-b">Tahun Ajaran</th>
+                                                    <th className="p-3 border-b">Tingkat Kelas</th>
+                                                    <th className="p-3 border-b">Nama Produk</th>
+                                                    <th className="p-3 border-b">Kelompok Kota</th>
                                                     <th className="p-3 border-b">Harga</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {db.map((item) => (
-                                                    <tr key={item.id} className="border-b hover:bg-gray-50">
-                                                        <td className="p-3 font-bold text-blue-600">{item.tahun}</td>
-                                                        <td className="p-3 text-gray-600">{item.tingkat}</td>
-                                                        <td className="p-3 text-gray-900 font-medium">{item.produk}</td>
-                                                        <td className="p-3 text-gray-600">Kel. {item.kelompok}</td>
-                                                        <td className="p-3 text-gray-900 font-bold">{formatRp(item.harga)}</td>
+                                                {db.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan="5" className="p-6 text-center text-gray-400">Belum ada data. Silakan upload file Excel.</td>
                                                     </tr>
-                                                ))}
+                                                ) : (
+                                                    db.map((item, index) => (
+                                                        <tr key={index} className="border-b hover:bg-gray-50">
+                                                            <td className="p-3 font-bold text-blue-600">{item.tahun}</td>
+                                                            <td className="p-3 text-gray-600">{item.tingkat}</td>
+                                                            <td className="p-3 text-gray-900 font-medium">{item.produk}</td>
+                                                            <td className="p-3 text-gray-600">Kelompok {item.kelompok}</td>
+                                                            <td className="p-3 text-gray-900 font-bold">{formatRp(item.harga)}</td>
+                                                        </tr>
+                                                    ))
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
                                 </div>
                             </div>
                         ) : (
-                            /* ================= TAMPILAN 2: PEMBANDING & PROYEKSI ================= */
+                            /* ================= TAMPILAN 2: PEMBANDING & EXPORT ================= */
                             <div>
-                                <div className="flex justify-between items-center mb-6 bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                                <div className="flex flex-col md:flex-row justify-between items-center mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200 gap-4">
                                     <div>
-                                        <h2 className="text-lg font-bold text-blue-900">Dashboard Komparasi & Simulasi Harga</h2>
-                                        <p className="text-sm text-blue-700">Melihat perbandingan histori harga otomatis berdasarkan produk yang dipilih.</p>
+                                        <h2 className="text-lg font-bold text-slate-900">Dashboard Komparasi & Simulasi Harga</h2>
+                                        <p className="text-sm text-slate-600">Bandingkan histori harga dan export hasilnya ke Excel.</p>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <span className="text-sm font-semibold text-gray-700">Pilih Produk:</span>
                                         <select 
                                             value={selectedProdComp} 
                                             onChange={(e) => setSelectedProdComp(e.target.value)}
-                                            className="bg-white border border-gray-300 rounded-xl px-4 py-2 font-medium shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="bg-white border border-gray-300 rounded-xl px-4 py-2 font-medium shadow-sm outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                         >
-                                            {listProdukUnik.map(p => (
-                                                <option key={p} value={p}>{p}</option>
-                                            ))}
+                                            {listProdukUnik.length === 0 ? (
+                                                <option>Tidak ada produk</option>
+                                            ) : (
+                                                listProdukUnik.map(p => (
+                                                    <option key={p} value={p}>{p}</option>
+                                                ))
+                                            )}
                                         </select>
+                                        <button onClick={handleExportComp} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-colors flex items-center gap-2">
+                                            📊 Export to Excel
+                                        </button>
                                     </div>
                                 </div>
 
@@ -185,12 +236,11 @@
                                                 <th className="p-4 border-b">TA 24/25</th>
                                                 <th className="p-4 border-b">TA 25/26</th>
                                                 <th className="p-4 border-b">TA 26/27</th>
-                                                <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA 27/28 (Input)</th>
+                                                <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA 27/28 (Input Simulasi)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {[1, 2, 3].map((kel) => {
-                                                // Ambil harga berdasarkan database yang diinput
                                                 const getHargaByTA = (ta) => {
                                                     const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
                                                     return found ? formatRp(found.harga) : '-';
@@ -206,6 +256,11 @@
                                                             <input 
                                                                 type="text"
                                                                 placeholder="Masukkan harga baru..."
+                                                                value={draft27[kel] ? formatRp(draft27[kel]).replace('Rp', '').trim() : ''}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value.replace(/\D/g, ''), 10) || 0;
+                                                                    setDraft27({...draft27, [kel]: val});
+                                                                }}
                                                                 className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                                             />
                                                         </td>
