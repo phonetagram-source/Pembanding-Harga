@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Proyeksi Harga</title>
+    <!-- Memuat Tailwind CSS untuk tampilan -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Memuat React -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-50 p-8">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        const baseData = {
+          "TWT 10 SMA 4 Pertemuan": { level: 10, groups: [
+            { id: 1, cities: "Jakarta, Bandung, Surabaya", hist: { "24/25": 1000000, "25/26": 1100000, "26/27": 1200000 } },
+            { id: 2, cities: "Semarang, Yogyakarta", hist: { "24/25": 900000, "25/26": 950000, "26/27": 1050000 } },
+            { id: 3, cities: "Malang, Solo", hist: { "24/25": 800000, "25/26": 850000, "26/27": 950000 } }
+          ]},
+          "TWT 11 SMA 4 Pertemuan": { level: 11, groups: [
+            { id: 1, cities: "Jakarta, Bandung, Surabaya", hist: { "24/25": 1100000, "25/26": 1200000, "26/27": 1300000 } },
+            { id: 2, cities: "Semarang, Yogyakarta", hist: { "24/25": 1000000, "25/26": 1050000, "26/27": 1150000 } },
+            { id: 3, cities: "Malang, Solo", hist: { "24/25": 900000, "25/26": 950000, "26/27": 1050000 } }
+          ]},
+          "TWT 12 SMA 4 Pertemuan": { level: 12, groups: [
+            { id: 1, cities: "Jakarta, Bandung, Surabaya", hist: { "24/25": 1200000, "25/26": 1300000, "26/27": 1400000 } },
+            { id: 2, cities: "Semarang, Yogyakarta", hist: { "24/25": 1100000, "25/26": 1150000, "26/27": 1250000 } },
+            { id: 3, cities: "Malang, Solo", hist: { "24/25": 1000000, "25/26": 1050000, "26/27": 1150000 } }
+          ]}
+        };
+
+        function DashboardHarga() {
+          const [selectedProduct, setSelectedProduct] = useState("TWT 12 SMA 4 Pertemuan");
+          const [expandedGroup, setExpandedGroup] = useState(null);
+          const [draftPrices, setDraftPrices] = useState({});
+
+          const activeData = baseData[selectedProduct];
+          const activeLevel = activeData.level;
+
+          const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
+
+          const handlePriceChange = (groupId, value) => {
+            const numValue = parseInt(value.replace(/\D/g, ''), 10) || 0;
+            setDraftPrices({
+              ...draftPrices,
+              [`${selectedProduct}-${groupId}`]: numValue
+            });
+          };
+
+          const getValidationError = (groupId, currentPrice) => {
+            if (!currentPrice) return null;
+
+            if (activeLevel === 12) {
+              const price11 = draftPrices[`TWT 11 SMA 4 Pertemuan-${groupId}`] || baseData["TWT 11 SMA 4 Pertemuan"].groups.find(g => g.id === groupId).hist["26/27"];
+              if (currentPrice <= price11) return `Harga harus lebih besar dari Kelas 11 (${formatRp(price11)})`;
+            } 
+            
+            if (activeLevel === 11) {
+              const price12 = draftPrices[`TWT 12 SMA 4 Pertemuan-${groupId}`];
+              const price10 = draftPrices[`TWT 10 SMA 4 Pertemuan-${groupId}`] || baseData["TWT 10 SMA 4 Pertemuan"].groups.find(g => g.id === groupId).hist["26/27"];
+              
+              if (price12 && currentPrice >= price12) return `Harga harus lebih kecil dari Kelas 12 (${formatRp(price12)})`;
+              if (currentPrice <= price10) return `Harga harus lebih besar dari Kelas 10 (${formatRp(price10)})`;
+            }
+
+            if (activeLevel === 10) {
+              const price11 = draftPrices[`TWT 11 SMA 4 Pertemuan-${groupId}`];
+              if (price11 && currentPrice >= price11) return `Harga harus lebih kecil dari Kelas 11 (${formatRp(price11)})`;
+            }
+
+            return null;
+          };
+
+          return (
+            <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-200 bg-gray-900 text-white flex justify-between items-center">
+                <div>
+                  <h1 className="text-2xl font-bold">Dashboard Proyeksi Harga</h1>
+                  <p className="text-sm text-gray-400 mt-1">Sistem Komparasi & Validasi Hierarki Kelas</p>
+                </div>
+                <select 
+                  className="bg-gray-800 text-white border border-gray-700 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                >
+                  {Object.keys(baseData).map(prod => (
+                    <option key={prod} value={prod}>{prod}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 text-sm">
+                        <th className="p-4 border-b font-semibold w-1/4">Kelompok Harga</th>
+                        <th className="p-4 border-b font-semibold">TA 24/25</th>
+                        <th className="p-4 border-b font-semibold">TA 25/26</th>
+                        <th className="p-4 border-b font-semibold">TA 26/27</th>
+                        <th className="p-4 border-b font-semibold bg-blue-50 w-1/4">Proyeksi TA 27/28</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeData.groups.map((group) => {
+                        const draftKey = `${selectedProduct}-${group.id}`;
+                        const currentDraft = draftPrices[draftKey] || '';
+                        const errorMsg = getValidationError(group.id, currentDraft);
+
+                        return (
+                          <React.Fragment key={group.id}>
+                            <tr className="border-b hover:bg-gray-50 transition-colors">
+                              <td className="p-4">
+                                <button 
+                                  onClick={() => setExpandedGroup(expandedGroup === group.id ? null : group.id)}
+                                  className="flex items-center gap-2 font-medium text-gray-800 hover:text-blue-600"
+                                >
+                                  <span className="text-lg">{expandedGroup === group.id ? '👇' : '👉'}</span>
+                                  Kelompok {group.id}
+                                </button>
+                              </td>
+                              <td className="p-4 text-gray-600">{formatRp(group.hist["24/25"])}</td>
+                              <td className="p-4 text-gray-600">{formatRp(group.hist["25/26"])}</td>
+                              <td className="p-4 text-gray-800 font-medium">{formatRp(group.hist["26/27"])}</td>
+                              <td className="p-4 bg-blue-50/30">
+                                <input 
+                                  type="text"
+                                  placeholder="Masukkan Harga Baru..."
+                                  value={currentDraft ? formatRp(currentDraft).replace('Rp', '').trim() : ''}
+                                  onChange={(e) => handlePriceChange(group.id, e.target.value)}
+                                  className={`w-full px-3 py-2 border rounded-md outline-none text-sm ${errorMsg ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-blue-500'}`}
+                                />
+                                {errorMsg && (
+                                  <div className="flex items-start gap-1 mt-2 text-xs text-red-600 font-medium">
+                                    <span>⚠️ {errorMsg}</span>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+
+                            {expandedGroup === group.id && (
+                              <tr className="bg-gray-50/80 border-b">
+                                <td colSpan={5} className="p-4 px-10">
+                                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                                    <span className="font-semibold text-gray-800">📍 Cakupan Kota:</span> {group.cities}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<DashboardHarga />);
+    </script>
+</body>
+</html>
