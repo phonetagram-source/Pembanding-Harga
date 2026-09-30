@@ -8,7 +8,6 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Memuat SheetJS untuk membaca dan mengexport file Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="bg-gray-100 p-6">
@@ -18,27 +17,28 @@
         const { useState } = React;
 
         const initialDatabase = [
-            { tahun: "24/25", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 11400000 },
-            { tahun: "25/26", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 13000000 },
-            { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 13700000 },
-            { tahun: "24/25", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 10500000 },
-            { tahun: "25/26", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 12100000 },
-            { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 12900000 },
+            { tahun: "24/25", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 1, harga: 11400000 },
+            { tahun: "25/26", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 1, harga: 13000000 },
+            { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 1, harga: 13700000 },
+            { tahun: "24/25", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 2, harga: 10500000 },
+            { tahun: "25/26", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 2, harga: 12100000 },
+            { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 2, harga: 12900000 },
         ];
 
         function App() {
             const [db, setDb] = useState(initialDatabase);
             const [activeMenu, setActiveMenu] = useState("input");
-            const [selectedProdComp, setSelectedProdComp] = useState("TWT 4P");
+            const [selectedProdComp, setSelectedProdComp] = useState("TWT 12 SMA 4P");
             const [draft27, setDraft27] = useState({});
 
             const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
 
-            // 1. Fitur Download Template Excel
+            // Download Template
             const handleDownloadTemplate = () => {
                 const templateData = [
-                    { Tahun_Ajaran: "27/28", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 4P", Kelompok_Kota: 1, Harga: 14400000 },
-                    { Tahun_Ajaran: "27/28", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 4P", Kelompok_Kota: 2, Harga: 13700000 }
+                    { Tahun_Ajaran: "24/25", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 11400000 },
+                    { Tahun_Ajaran: "25/26", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 13000000 },
+                    { Tahun_Ajaran: "26/27", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 13700000 }
                 ];
                 const worksheet = XLSX.utils.json_to_sheet(templateData);
                 const workbook = XLSX.utils.book_new();
@@ -46,7 +46,7 @@
                 XLSX.writeFile(workbook, "template_database_harga.xlsx");
             };
 
-            // 2. Fitur Upload Excel
+            // Upload Excel cerdas (Mendukung berbagai bentuk kolom)
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -57,39 +57,86 @@
                         const dataBuffer = new Uint8Array(evt.target.result);
                         const workbook = XLSX.read(dataBuffer, { type: 'array' });
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
                         if (jsonData.length === 0) {
                             alert("File Excel kosong!");
                             return;
                         }
 
-                        const formattedData = jsonData.map(row => ({
-                            tahun: String(row.Tahun_Ajaran || row.tahun || row.TA || "26/27"),
-                            tingkat: String(row.Tingkat_Kelas || row.tingkat || "12 SMA"),
-                            produk: String(row.Nama_Produk || row.produk || "Produk Baru"),
-                            kelompok: parseInt(row.Kelompok_Kota || row.kelompok || 1),
-                            harga: parseInt(String(row.Harga || row.harga || 0).replace(/\D/g, '')) || 0
-                        }));
+                        let formattedData = [];
+
+                        jsonData.forEach((row) => {
+                            // Cek apakah formatnya long format (ada kolom tahun/Tahun_Ajaran)
+                            const tahun = row.Tahun_Ajaran || row.tahun_ajaran || row.TA || row.ta || row.Tahun || "";
+                            const produk = row.Nama_Produk || row.nama_produk || row.Produk || row.produk || "";
+                            
+                            if (tahun && produk) {
+                                formattedData.push({
+                                    tahun: String(tahun).trim(),
+                                    tingkat: String(row.Tingkat_Kelas || row.tingkat_kelas || row.Kelas || "12 SMA").trim(),
+                                    produk: String(produk).trim(),
+                                    kelompok: parseInt(row.Kelompok_Kota || row.kelompok_kota || row.Kelompok || row.kelompok || 1),
+                                    harga: parseInt(String(row.Harga || row.harga || 0).replace(/\D/g, '')) || 0
+                                });
+                            } else {
+                                // Jika formatnya mendeteksi baris tabel biasa, cari key yang mengandung angka harga
+                                Object.keys(row).forEach(key => {
+                                    // Deteksi jika nama kolom mengandung tahun (misal "24/25" atau "25/26")
+                                    const matchYear = key.match(/(\d{2}\/\d{2})/);
+                                    if (matchYear) {
+                                        const detectedYear = matchYear[1];
+                                        const val = row[key];
+                                        const cleanVal = parseInt(String(val).replace(/\D/g, ''), 10);
+                                        
+                                        if (cleanVal > 0) {
+                                            // Cari nama produk dari header kolom atau baris
+                                            let prodName = key.replace(detectedYear, "").replace("TA", "").trim();
+                                            if (!prodName || prodName.length < 3) prodName = "Produk Utama";
+
+                                            const kelompokVal = parseInt(row['Kelompok Kota'] || row['Kelompok'] || row['Kelompok_Kota'] || row[Object.keys(row)[0]] || 1) || 1;
+
+                                            formattedData.push({
+                                                tahun: detectedYear,
+                                                tingkat: "12 SMA",
+                                                produk: prodName,
+                                                kelompok: kelompokVal,
+                                                harga: cleanVal
+                                            });
+                                        }
+                                    }
+                                });
+                            }
+                        });
+
+                        // Fallback jika membaca row standar template
+                        if (formattedData.length === 0) {
+                            formattedData = jsonData.map(row => ({
+                                tahun: String(row.Tahun_Ajaran || row.tahun || "26/27"),
+                                tingkat: String(row.Tingkat_Kelas || row.tingkat || "12 SMA"),
+                                produk: String(row.Nama_Produk || row.produk || "Produk Utama"),
+                                kelompok: parseInt(row.Kelompok_Kota || row.kelompok || 1),
+                                harga: parseInt(String(row.Harga || row.harga || 0).replace(/\D/g, '')) || 0
+                            }));
+                        }
 
                         setDb(formattedData);
-                        alert(`Berhasil! ${formattedData.length} baris data berhasil di-upload.`);
+                        alert(`Berhasil! ${formattedData.length} baris data berhasil dimuat ke sistem.`);
                     } catch (error) {
-                        alert("Gagal membaca file Excel. Pastikan format kolom sesuai template.");
+                        console.error(error);
+                        alert("Gagal membaca file Excel. Pastikan menggunakan format template yang disediakan.");
                     }
                 };
                 reader.readAsArrayBuffer(file);
             };
 
-            // 3. Fitur Reset Database
             const handleResetData = () => {
-                if (confirm("Apakah Anda yakin ingin menghapus SEMUA data di dalam sistem?")) {
+                if (confirm("Hapus semua data di sistem?")) {
                     setDb([]);
-                    alert("Database berhasil dikosongkan.");
+                    alert("Database dikosongkan.");
                 }
             };
 
-            // 4. Fitur Export Pembanding to Excel
             const handleExportComp = () => {
                 const exportData = [1, 2, 3].map(kel => {
                     const getVal = (ta) => {
@@ -116,7 +163,6 @@
 
             return (
                 <div className="max-w-6xl mx-auto bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
-                    {/* Header Navigasi */}
                     <div className="bg-slate-900 text-white p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                         <div>
                             <h1 className="text-2xl font-bold">Aplikasi Pengelola & Proyeksi Harga</h1>
@@ -140,13 +186,12 @@
 
                     <div className="p-8">
                         {activeMenu === 'input' ? (
-                            /* ================= TAMPILAN 1: UPLOAD & KELOLA ================= */
                             <div className="space-y-6">
                                 <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
                                         <h2 className="text-lg font-bold text-blue-900">Kelola Data Harga Massal</h2>
                                         <p className="text-sm text-blue-700 mt-1">
-                                            Download template terlebih dahulu, isi datanya, lalu upload kembali ke sistem.
+                                            Download template resmi atau upload file Excel Anda langsung.
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap gap-3">
@@ -159,7 +204,7 @@
                                         </label>
                                         {db.length > 0 && (
                                             <button onClick={handleResetData} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-4 py-2.5 rounded-xl font-bold text-sm transition-colors">
-                                                🗑️ Reset Database
+                                                🗑️ Reset
                                             </button>
                                         )}
                                     </div>
@@ -200,7 +245,6 @@
                                 </div>
                             </div>
                         ) : (
-                            /* ================= TAMPILAN 2: PEMBANDING & EXPORT ================= */
                             <div>
                                 <div className="flex flex-col md:flex-row justify-between items-center mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200 gap-4">
                                     <div>
@@ -223,7 +267,7 @@
                                             )}
                                         </select>
                                         <button onClick={handleExportComp} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-colors flex items-center gap-2">
-                                            📊 Export to Excel
+                                            📊 Export
                                         </button>
                                     </div>
                                 </div>
