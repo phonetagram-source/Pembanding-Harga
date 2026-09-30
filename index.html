@@ -3,169 +3,227 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Proyeksi Harga</title>
-    <!-- Memuat Tailwind CSS untuk tampilan -->
+    <title>Sistem Proyeksi & Komparasi Harga</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Memuat React -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body class="bg-gray-50 p-8">
+<body class="bg-gray-100 p-6">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState } = React;
 
-        const baseData = {
-          "TWT 10 SMA 4 Pertemuan": { level: 10, groups: [
-            { id: 1, cities: "Jakarta, Bandung, Surabaya", hist: { "24/25": 1000000, "25/26": 1100000, "26/27": 1200000 } },
-            { id: 2, cities: "Semarang, Yogyakarta", hist: { "24/25": 900000, "25/26": 950000, "26/27": 1050000 } },
-            { id: 3, cities: "Malang, Solo", hist: { "24/25": 800000, "25/26": 850000, "26/27": 950000 } }
-          ]},
-          "TWT 11 SMA 4 Pertemuan": { level: 11, groups: [
-            { id: 1, cities: "Jakarta, Bandung, Surabaya", hist: { "24/25": 1100000, "25/26": 1200000, "26/27": 1300000 } },
-            { id: 2, cities: "Semarang, Yogyakarta", hist: { "24/25": 1000000, "25/26": 1050000, "26/27": 1150000 } },
-            { id: 3, cities: "Malang, Solo", hist: { "24/25": 900000, "25/26": 950000, "26/27": 1050000 } }
-          ]},
-          "TWT 12 SMA 4 Pertemuan": { level: 12, groups: [
-            { id: 1, cities: "Jakarta, Bandung, Surabaya", hist: { "24/25": 1200000, "25/26": 1300000, "26/27": 1400000 } },
-            { id: 2, cities: "Semarang, Yogyakarta", hist: { "24/25": 1100000, "25/26": 1150000, "26/27": 1250000 } },
-            { id: 3, cities: "Malang, Solo", hist: { "24/25": 1000000, "25/26": 1050000, "26/27": 1150000 } }
-          ]}
-        };
+        // Data awal (Contoh data base)
+        const initialDatabase = [
+            { id: 1, tahun: "24/25", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 11400000 },
+            { id: 2, tahun: "25/26", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 13000000 },
+            { id: 3, tahun: "26/27", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 1, harga: 13700000 },
+            { id: 4, tahun: "24/25", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 10500000 },
+            { id: 5, tahun: "25/26", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 12100000 },
+            { id: 6, tahun: "26/27", tingkat: "12 SMA", produk: "TWT 4P", kelompok: 2, harga: 12900000 },
+        ];
 
-        function DashboardHarga() {
-          const [selectedProduct, setSelectedProduct] = useState("TWT 12 SMA 4 Pertemuan");
-          const [expandedGroup, setExpandedGroup] = useState(null);
-          const [draftPrices, setDraftPrices] = useState({});
+        function App() {
+            const [db, setDb] = useState(initialDatabase);
+            const [activeMenu, setActiveMenu] = useState("input"); // 'input' atau 'pembanding'
 
-          const activeData = baseData[selectedProduct];
-          const activeLevel = activeData.level;
+            // State Form Input
+            const [tahun, setTahun] = useState("26/27");
+            const [tingkat, setTingkat] = useState("12 SMA");
+            const [produk, setProduk] = useState("TWT 4P");
+            const [kelompok, setKelompok] = useState(1);
+            const [harga, setHarga] = useState("");
 
-          const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
+            // State Proyeksi Pembanding
+            const [selectedProdComp, setSelectedProdComp] = useState("TWT 4P");
+            const [draft27, setDraft27] = useState({});
 
-          const handlePriceChange = (groupId, value) => {
-            const numValue = parseInt(value.replace(/\D/g, ''), 10) || 0;
-            setDraftPrices({
-              ...draftPrices,
-              [`${selectedProduct}-${groupId}`]: numValue
-            });
-          };
+            const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
 
-          const getValidationError = (groupId, currentPrice) => {
-            if (!currentPrice) return null;
+            // Handler Tambah Data Manual
+            const handleAddData = (e) => {
+                e.preventDefault();
+                if (!harga) return;
 
-            if (activeLevel === 12) {
-              const price11 = draftPrices[`TWT 11 SMA 4 Pertemuan-${groupId}`] || baseData["TWT 11 SMA 4 Pertemuan"].groups.find(g => g.id === groupId).hist["26/27"];
-              if (currentPrice <= price11) return `Harga harus lebih besar dari Kelas 11 (${formatRp(price11)})`;
-            } 
-            
-            if (activeLevel === 11) {
-              const price12 = draftPrices[`TWT 12 SMA 4 Pertemuan-${groupId}`];
-              const price10 = draftPrices[`TWT 10 SMA 4 Pertemuan-${groupId}`] || baseData["TWT 10 SMA 4 Pertemuan"].groups.find(g => g.id === groupId).hist["26/27"];
-              
-              if (price12 && currentPrice >= price12) return `Harga harus lebih kecil dari Kelas 12 (${formatRp(price12)})`;
-              if (currentPrice <= price10) return `Harga harus lebih besar dari Kelas 10 (${formatRp(price10)})`;
-            }
+                const newItem = {
+                    id: db.length + 1,
+                    tahun,
+                    tingkat,
+                    produk,
+                    kelompok: parseInt(kelompok),
+                    harga: parseInt(harga.replace(/\D/g, '')) || 0
+                };
 
-            if (activeLevel === 10) {
-              const price11 = draftPrices[`TWT 11 SMA 4 Pertemuan-${groupId}`];
-              if (price11 && currentPrice >= price11) return `Harga harus lebih kecil dari Kelas 11 (${formatRp(price11)})`;
-            }
+                setDb([...db, newItem]);
+                setHarga("");
+                alert("Data harga berhasil disimpan ke database!");
+            };
 
-            return null;
-          };
+            // Ambil daftar produk unik untuk dropdown komparasi
+            const listProdukUnik = [...new Set(db.map(item => item.produk))];
 
-          return (
-            <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-6 border-b border-gray-200 bg-gray-900 text-white flex justify-between items-center">
-                <div>
-                  <h1 className="text-2xl font-bold">Dashboard Proyeksi Harga</h1>
-                  <p className="text-sm text-gray-400 mt-1">Sistem Komparasi & Validasi Hierarki Kelas</p>
+            return (
+                <div className="max-w-6xl mx-auto bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+                    {/* Header Navigasi Utama */}
+                    <div className="bg-slate-900 text-white p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h1 className="text-2xl font-bold">Aplikasi Pengelola & Proyeksi Harga</h1>
+                            <p className="text-sm text-gray-400 mt-1">Kelola database manual dan bandingkan tren harga antar tahun ajaran</p>
+                        </div>
+                        <div className="flex bg-slate-800 p-1.5 rounded-xl border border-slate-700">
+                            <button 
+                                onClick={() => setActiveMenu("input")}
+                                className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeMenu === 'input' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}
+                            >
+                                📝 1. Tampilan Input Data
+                            </button>
+                            <button 
+                                onClick={() => setActiveMenu("pembanding")}
+                                className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeMenu === 'pembanding' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}
+                            >
+                                📊 2. Tampilan Pembanding
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Konten Berdasarkan Menu Aktif */}
+                    <div className="p-8">
+                        {activeMenu === 'input' ? (
+                            /* ================= TAMPILAN 1: INPUT DATA ================= */
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                                <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 shadow-sm">
+                                    <h2 className="text-lg font-bold text-gray-800 mb-4">Input / Tambah Data Harga Dasar</h2>
+                                    <form onSubmit={handleAddData} className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Tahun Ajaran</label>
+                                            <input type="text" value={tahun} onChange={(e) => setTahun(e.target.value)} placeholder="Contoh: 24/25, 25/26, 26/27" className="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Tingkat Kelas</label>
+                                            <select value={tingkat} onChange={(e) => setTingkat(e.target.value)} className="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
+                                                <option value="10 SMA">10 SMA</option>
+                                                <option value="11 SMA">11 SMA</option>
+                                                <option value="12 SMA">12 SMA</option>
+                                                <option value="Gapyear">Gapyear</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk</label>
+                                            <input type="text" value={produk} onChange={(e) => setProduk(e.target.value)} placeholder="Contoh: TWT 4P" className="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Kelompok Kota (1 s.d 24)</label>
+                                            <input type="number" min="1" max="24" value={kelompok} onChange={(e) => setKelompok(e.target.value)} className="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Harga (Rp)</label>
+                                            <input type="text" value={harga} onChange={(e) => setHarga(e.target.value)} placeholder="Contoh: 13000000" className="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required />
+                                        </div>
+                                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-md">
+                                            + Simpan ke Database
+                                        </button>
+                                    </form>
+                                </div>
+
+                                <div>
+                                    <h2 className="text-lg font-bold text-gray-800 mb-4">Daftar Database Tersimpan</h2>
+                                    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm max-h-[500px] overflow-y-auto">
+                                        <table className="w-full text-left border-collapse text-sm">
+                                            <thead className="bg-gray-100 text-gray-700 sticky top-0">
+                                                <tr>
+                                                    <th className="p-3 border-b">TA</th>
+                                                    <th className="p-3 border-b">Kelas</th>
+                                                    <th className="p-3 border-b">Produk</th>
+                                                    <th className="p-3 border-b">Kelompok</th>
+                                                    <th className="p-3 border-b">Harga</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {db.map((item) => (
+                                                    <tr key={item.id} className="border-b hover:bg-gray-50">
+                                                        <td className="p-3 font-bold text-blue-600">{item.tahun}</td>
+                                                        <td className="p-3 text-gray-600">{item.tingkat}</td>
+                                                        <td className="p-3 text-gray-900 font-medium">{item.produk}</td>
+                                                        <td className="p-3 text-gray-600">Kel. {item.kelompok}</td>
+                                                        <td className="p-3 text-gray-900 font-bold">{formatRp(item.harga)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            /* ================= TAMPILAN 2: PEMBANDING & PROYEKSI ================= */
+                            <div>
+                                <div className="flex justify-between items-center mb-6 bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                                    <div>
+                                        <h2 className="text-lg font-bold text-blue-900">Dashboard Komparasi & Simulasi Harga</h2>
+                                        <p className="text-sm text-blue-700">Melihat perbandingan histori harga otomatis berdasarkan produk yang dipilih.</p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-sm font-semibold text-gray-700">Pilih Produk:</span>
+                                        <select 
+                                            value={selectedProdComp} 
+                                            onChange={(e) => setSelectedProdComp(e.target.value)}
+                                            className="bg-white border border-gray-300 rounded-xl px-4 py-2 font-medium shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            {listProdukUnik.map(p => (
+                                                <option key={p} value={p}>{p}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto border border-gray-200 rounded-2xl shadow-sm">
+                                    <table className="w-full text-left border-collapse text-sm">
+                                        <thead className="bg-gray-100 text-gray-700">
+                                            <tr>
+                                                <th className="p-4 border-b">Kelompok Kota</th>
+                                                <th className="p-4 border-b">TA 24/25</th>
+                                                <th className="p-4 border-b">TA 25/26</th>
+                                                <th className="p-4 border-b">TA 26/27</th>
+                                                <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA 27/28 (Input)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {[1, 2, 3].map((kel) => {
+                                                // Ambil harga berdasarkan database yang diinput
+                                                const getHargaByTA = (ta) => {
+                                                    const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
+                                                    return found ? formatRp(found.harga) : '-';
+                                                };
+
+                                                return (
+                                                    <tr key={kel} className="border-b hover:bg-gray-50">
+                                                        <td className="p-4 font-bold text-gray-800">Kelompok {kel}</td>
+                                                        <td className="p-4 text-gray-600">{getHargaByTA("24/25")}</td>
+                                                        <td className="p-4 text-gray-600">{getHargaByTA("25/26")}</td>
+                                                        <td className="p-4 text-gray-900 font-semibold">{getHargaByTA("26/27")}</td>
+                                                        <td className="p-4 bg-blue-50/50">
+                                                            <input 
+                                                                type="text"
+                                                                placeholder="Masukkan harga baru..."
+                                                                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <select 
-                  className="bg-gray-800 text-white border border-gray-700 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                  value={selectedProduct}
-                  onChange={(e) => setSelectedProduct(e.target.value)}
-                >
-                  {Object.keys(baseData).map(prod => (
-                    <option key={prod} value={prod}>{prod}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="p-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-gray-100 text-gray-700 text-sm">
-                        <th className="p-4 border-b font-semibold w-1/4">Kelompok Harga</th>
-                        <th className="p-4 border-b font-semibold">TA 24/25</th>
-                        <th className="p-4 border-b font-semibold">TA 25/26</th>
-                        <th className="p-4 border-b font-semibold">TA 26/27</th>
-                        <th className="p-4 border-b font-semibold bg-blue-50 w-1/4">Proyeksi TA 27/28</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeData.groups.map((group) => {
-                        const draftKey = `${selectedProduct}-${group.id}`;
-                        const currentDraft = draftPrices[draftKey] || '';
-                        const errorMsg = getValidationError(group.id, currentDraft);
-
-                        return (
-                          <React.Fragment key={group.id}>
-                            <tr className="border-b hover:bg-gray-50 transition-colors">
-                              <td className="p-4">
-                                <button 
-                                  onClick={() => setExpandedGroup(expandedGroup === group.id ? null : group.id)}
-                                  className="flex items-center gap-2 font-medium text-gray-800 hover:text-blue-600"
-                                >
-                                  <span className="text-lg">{expandedGroup === group.id ? '👇' : '👉'}</span>
-                                  Kelompok {group.id}
-                                </button>
-                              </td>
-                              <td className="p-4 text-gray-600">{formatRp(group.hist["24/25"])}</td>
-                              <td className="p-4 text-gray-600">{formatRp(group.hist["25/26"])}</td>
-                              <td className="p-4 text-gray-800 font-medium">{formatRp(group.hist["26/27"])}</td>
-                              <td className="p-4 bg-blue-50/30">
-                                <input 
-                                  type="text"
-                                  placeholder="Masukkan Harga Baru..."
-                                  value={currentDraft ? formatRp(currentDraft).replace('Rp', '').trim() : ''}
-                                  onChange={(e) => handlePriceChange(group.id, e.target.value)}
-                                  className={`w-full px-3 py-2 border rounded-md outline-none text-sm ${errorMsg ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-blue-500'}`}
-                                />
-                                {errorMsg && (
-                                  <div className="flex items-start gap-1 mt-2 text-xs text-red-600 font-medium">
-                                    <span>⚠️ {errorMsg}</span>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-
-                            {expandedGroup === group.id && (
-                              <tr className="bg-gray-50/80 border-b">
-                                <td colSpan={5} className="p-4 px-10">
-                                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                                    <span className="font-semibold text-gray-800">📍 Cakupan Kota:</span> {group.cities}
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          );
+            );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<DashboardHarga />);
+        root.render(<App />);
     </script>
 </body>
 </html>
