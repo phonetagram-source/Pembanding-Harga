@@ -33,7 +33,6 @@
 
             const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
 
-            // Download Template
             const handleDownloadTemplate = () => {
                 const templateData = [
                     { Tahun_Ajaran: "24/25", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 11400000 },
@@ -46,7 +45,6 @@
                 XLSX.writeFile(workbook, "template_database_harga.xlsx");
             };
 
-            // Upload Excel cerdas (Mendukung berbagai bentuk kolom)
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -67,7 +65,6 @@
                         let formattedData = [];
 
                         jsonData.forEach((row) => {
-                            // Cek apakah formatnya long format (ada kolom tahun/Tahun_Ajaran)
                             const tahun = row.Tahun_Ajaran || row.tahun_ajaran || row.TA || row.ta || row.Tahun || "";
                             const produk = row.Nama_Produk || row.nama_produk || row.Produk || row.produk || "";
                             
@@ -80,9 +77,7 @@
                                     harga: parseInt(String(row.Harga || row.harga || 0).replace(/\D/g, '')) || 0
                                 });
                             } else {
-                                // Jika formatnya mendeteksi baris tabel biasa, cari key yang mengandung angka harga
                                 Object.keys(row).forEach(key => {
-                                    // Deteksi jika nama kolom mengandung tahun (misal "24/25" atau "25/26")
                                     const matchYear = key.match(/(\d{2}\/\d{2})/);
                                     if (matchYear) {
                                         const detectedYear = matchYear[1];
@@ -90,7 +85,6 @@
                                         const cleanVal = parseInt(String(val).replace(/\D/g, ''), 10);
                                         
                                         if (cleanVal > 0) {
-                                            // Cari nama produk dari header kolom atau baris
                                             let prodName = key.replace(detectedYear, "").replace("TA", "").trim();
                                             if (!prodName || prodName.length < 3) prodName = "Produk Utama";
 
@@ -109,7 +103,6 @@
                             }
                         });
 
-                        // Fallback jika membaca row standar template
                         if (formattedData.length === 0) {
                             formattedData = jsonData.map(row => ({
                                 tahun: String(row.Tahun_Ajaran || row.tahun || "26/27"),
@@ -124,7 +117,7 @@
                         alert(`Berhasil! ${formattedData.length} baris data berhasil dimuat ke sistem.`);
                     } catch (error) {
                         console.error(error);
-                        alert("Gagal membaca file Excel. Pastikan menggunakan format template yang disediakan.");
+                        alert("Gagal membaca file Excel.");
                     }
                 };
                 reader.readAsArrayBuffer(file);
@@ -137,8 +130,13 @@
                 }
             };
 
+            const listProdukUnik = [...new Set(db.map(item => item.produk))];
+
+            // Ambil daftar kelompok kota unik secara otomatis berdasarkan produk yang dipilih
+            const listKelompokUnik = [...new Set(db.filter(d => d.produk === selectedProdComp).map(d => d.kelompok))].sort((a, b) => a - b);
+
             const handleExportComp = () => {
-                const exportData = [1, 2, 3].map(kel => {
+                const exportData = listKelompokUnik.map(kel => {
                     const getVal = (ta) => {
                         const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
                         return found ? found.harga : 0;
@@ -158,8 +156,6 @@
                 XLSX.utils.book_append_sheet(workbook, worksheet, "Komparasi Harga");
                 XLSX.writeFile(workbook, `Komparasi_${selectedProdComp.replace(/\s+/g, '_')}.xlsx`);
             };
-
-            const listProdukUnik = [...new Set(db.map(item => item.produk))];
 
             return (
                 <div className="max-w-6xl mx-auto bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
@@ -272,9 +268,9 @@
                                     </div>
                                 </div>
 
-                                <div className="overflow-x-auto border border-gray-200 rounded-2xl shadow-sm">
+                                <div className="overflow-x-auto border border-gray-200 rounded-2xl shadow-sm max-h-[500px] overflow-y-auto">
                                     <table className="w-full text-left border-collapse text-sm">
-                                        <thead className="bg-gray-100 text-gray-700">
+                                        <thead className="bg-gray-100 text-gray-700 sticky top-0">
                                             <tr>
                                                 <th className="p-4 border-b">Kelompok Kota</th>
                                                 <th className="p-4 border-b">TA 24/25</th>
@@ -284,33 +280,39 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {[1, 2, 3].map((kel) => {
-                                                const getHargaByTA = (ta) => {
-                                                    const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
-                                                    return found ? formatRp(found.harga) : '-';
-                                                };
+                                            {listKelompokUnik.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="5" className="p-6 text-center text-gray-400">Tidak ada data kelompok untuk produk ini.</td>
+                                                </tr>
+                                            ) : (
+                                                listKelompokUnik.map((kel) => {
+                                                    const getHargaByTA = (ta) => {
+                                                        const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
+                                                        return found ? formatRp(found.harga) : '-';
+                                                    };
 
-                                                return (
-                                                    <tr key={kel} className="border-b hover:bg-gray-50">
-                                                        <td className="p-4 font-bold text-gray-800">Kelompok {kel}</td>
-                                                        <td className="p-4 text-gray-600">{getHargaByTA("24/25")}</td>
-                                                        <td className="p-4 text-gray-600">{getHargaByTA("25/26")}</td>
-                                                        <td className="p-4 text-gray-900 font-semibold">{getHargaByTA("26/27")}</td>
-                                                        <td className="p-4 bg-blue-50/50">
-                                                            <input 
-                                                                type="text"
-                                                                placeholder="Masukkan harga baru..."
-                                                                value={draft27[kel] ? formatRp(draft27[kel]).replace('Rp', '').trim() : ''}
-                                                                onChange={(e) => {
-                                                                    const val = parseInt(e.target.value.replace(/\D/g, ''), 10) || 0;
-                                                                    setDraft27({...draft27, [kel]: val});
-                                                                }}
-                                                                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                                            />
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
+                                                    return (
+                                                        <tr key={kel} className="border-b hover:bg-gray-50">
+                                                            <td className="p-4 font-bold text-gray-800">Kelompok {kel}</td>
+                                                            <td className="p-4 text-gray-600">{getHargaByTA("24/25")}</td>
+                                                            <td className="p-4 text-gray-600">{getHargaByTA("25/26")}</td>
+                                                            <td className="p-4 text-gray-900 font-semibold">{getHargaByTA("26/27")}</td>
+                                                            <td className="p-4 bg-blue-50/50">
+                                                                <input 
+                                                                    type="text"
+                                                                    placeholder="Masukkan harga baru..."
+                                                                    value={draft27[kel] ? formatRp(draft27[kel]).replace('Rp', '').trim() : ''}
+                                                                    onChange={(e) => {
+                                                                        const val = parseInt(e.target.value.replace(/\D/g, ''), 10) || 0;
+                                                                        setDraft27({...draft27, [kel]: val});
+                                                                    }}
+                                                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                                                />
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
