@@ -181,22 +181,25 @@
                 return Math.max(0, currentPrice) * jumlahSiswa;
             };
 
-            // FUNGSI KALKULASI FINANSIAL LENGKAP (Cost Dasar + Pajak 2% + Biaya Lain-lain 10%)
+            // FUNGSI KALKULASI FINANSIAL (Base Cost -> + Pajak 2% -> + Biaya Lain-lain 10% dari hasil setelah pajak)
             const calculateFinancials = (hargaAcuan, maxKBM, maxTO) => {
                 const nettIncome = calculateNettIncomePerSiswa(hargaAcuan);
                 
-                // 1. Pajak 2% dari Income (Nett Income)
-                const pajakIncome = nettIncome * 0.02;
-
-                // 2. Akumulasi Cost Dasar
+                // 1. Base Cost Dasar
                 const biayaKonsultasi = maxKBM * 0.33 * jumlahKonsultasi;
                 const baseCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxKBM) + (toTarget * maxTO) + biayaKonsultasi;
 
-                // 3. Biaya Lain-lain 10% dari Total Cost Dasar
-                const biayaLainLain = baseCost * 0.10;
+                // 2. Pajak Income 2% dari Nett Income
+                const pajakIncome = nettIncome * 0.02;
 
-                // 4. Total Cost Final = Cost Dasar + Pajak Income + Biaya Lain-lain 10%
-                const totalCostFinal = baseCost + pajakIncome + biayaLainLain;
+                // 3. Cost setelah ditambah pajak income
+                const costWithTax = baseCost + pajakIncome;
+
+                // 4. Biaya Lain-lain 10% dari cost setelah pajak
+                const biayaLainLain = costWithTax * 0.10;
+
+                // 5. Total Cost Final = Cost with Tax + Biaya Lain-lain 10%
+                const totalCostFinal = costWithTax + biayaLainLain;
 
                 const grossProfit = nettIncome - totalCostFinal;
                 const profitMargin = nettIncome > 0 ? (grossProfit / nettIncome) * 100 : 0;
@@ -230,8 +233,8 @@
                     listTahunUnik.forEach(ta => { rowObj[`TA ${ta}`] = getVal(ta); });
                     rowObj[`Proyeksi ${targetTA}`] = hargaAcuan;
                     rowObj["Nett Income"] = Math.round(fin.nettIncome);
-                    rowObj["Pajak (2%)"] = Math.round(fin.pajakIncome);
                     rowObj["Base Cost"] = Math.round(fin.baseCost);
+                    rowObj["Pajak (2%)"] = Math.round(fin.pajakIncome);
                     rowObj["Biaya Lain (10%)"] = Math.round(fin.biayaLainLain);
                     rowObj["Total Cost (Final)"] = Math.round(fin.totalCostFinal);
                     rowObj["Margin (Rp)"] = Math.round(fin.grossProfit);
@@ -256,8 +259,8 @@
                         "Tarif KBM Kota": c.tarifKBM,
                         "Tarif TO Kota": c.tarifTO,
                         "Nett Income": Math.round(fin.nettIncome),
-                        "Pajak (2%)": Math.round(fin.pajakIncome),
                         "Base Cost": Math.round(fin.baseCost),
+                        "Pajak (2%)": Math.round(fin.pajakIncome),
                         "Biaya Lain (10%)": Math.round(fin.biayaLainLain),
                         "Total Cost (Final)": Math.round(fin.totalCostFinal),
                         "Margin (Rp)": Math.round(fin.grossProfit),
@@ -468,7 +471,7 @@
                                                 <input type="number" min="0" value={jumlahKonsultasi} onChange={(e) => setJumlahKonsultasi(parseInt(e.target.value) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs font-semibold" />
                                             </div>
                                             <div className="pt-1 text-[11px] text-blue-900 font-semibold bg-blue-100/50 p-2 rounded-lg">
-                                                ➕ Pajak Income 2% & Biaya Lain-lain 10% dari Total Cost otomatis ditambahkan.
+                                                ➕ Base Cost ditambahkan Pajak 2% (dari Income), lalu totalnya ditambah Biaya Lain-lain 10%.
                                             </div>
                                         </div>
                                     </div>
@@ -484,7 +487,7 @@
                                                 ))}
                                                 <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA {targetTA}</th>
                                                 <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income</th>
-                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Final + Pajak 2% + Lain 10%)</th>
+                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Base + Pajak 2% + Lain 10%)</th>
                                                 <th className="p-4 border-b bg-purple-50 text-purple-900">Profit Margin</th>
                                             </tr>
                                         </thead>
@@ -518,7 +521,7 @@
                                                                 />
                                                             </td>
                                                             <td className="p-4 bg-emerald-50/40 font-bold text-emerald-700 text-xs">{formatRp(fin.nettIncome)}</td>
-                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Base Cost: ${formatRp(fin.baseCost)} + Pajak 2%: ${formatRp(fin.pajakIncome)} + Lain 10%: ${formatRp(fin.biayaLainLain)}`}>
+                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Base Cost: ${formatRp(fin.baseCost)} + Pajak 2%: ${formatRp(fin.pajakIncome)} -> + Lain 10%: ${formatRp(fin.biayaLainLain)}`}>
                                                                 {formatRp(fin.totalCostFinal)}
                                                             </td>
                                                             <td className="p-4 bg-purple-50/40 font-bold text-purple-700">
