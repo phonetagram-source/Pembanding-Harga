@@ -36,7 +36,7 @@
         function App() {
             const [db, setDb] = useState(initialDatabase);
             const [cityDb, setCityDb] = useState(initialCityDatabase);
-            const [realisasiSiswaDb, setRealisasiSiswaDb] = useState([]); // Database Jumsis Realisasi per Kota & Produk
+            const [realisasiSiswaDb, setRealisasiSiswaDb] = useState([]);
             const [activeMenu, setActiveMenu] = useState("input");
             
             const [selectedProdComp, setSelectedProdComp] = useState("TWT 12 SMA 4P");
@@ -73,7 +73,12 @@
 
             const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
 
-            const listTahunUnik = [...new Set(db.map(d => d.tahun))].sort();
+            // MENGAMBIL SEMUA TAHUN AJARAN UNIK DARI PRODUK YANG DIPILIH SECARA DINAMIS
+            const listTahunUnik = [...new Set(db.filter(d => d.produk === selectedProdComp).map(d => d.tahun))].sort((a, b) => {
+                // Urutkan tahun ajaran secara kronologis (misal: 23/24, 24/25, 25/26)
+                return a.localeCompare(b);
+            });
+            
             const latestTA = listTahunUnik.length > 0 ? listTahunUnik[listTahunUnik.length - 1] : "26/27";
             
             function getPrevOrNextTA(ta, direction) {
@@ -154,7 +159,6 @@
                 reader.readAsArrayBuffer(file);
             };
 
-            // UPLOAD JUMSIS REALISASI PER KOTA
             const handleUploadRealisasiSiswa = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -251,7 +255,6 @@
                 };
             };
 
-            // MENDAPATKAN JUMSIS REALISASI DARI DATABASE UPLOAD (DEFAULT 0 JIKA BELUM ADA)
             const getJumsisReal = (namaKota, produkNama) => {
                 const found = realisasiSiswaDb.find(r => r.kota.toLowerCase() === namaKota.toLowerCase() && r.produk.toLowerCase() === produkNama.toLowerCase());
                 return found ? found.jumsisReal : 0;
@@ -260,7 +263,6 @@
             const handleExportComp = () => {
                 const wb = XLSX.utils.book_new();
 
-                // SHEET 1: PER KELOMPOK KOTA (DENGAN RANGE MARGIN TARGET & REAL)
                 const exportKelompok = listKelompokUnik.map(kel => {
                     const getVal = (ta) => {
                         const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
@@ -269,10 +271,8 @@
                     const tarif = getMaxTarifByKelompok(kel);
                     const hargaAcuan = draftProyeksi[kel] || getVal(latestTA) || 0;
                     
-                    // Hitung dengan Jumsis Target (Kalkulator)
                     const finTarget = calculateFinancials(hargaAcuan, tarif.maxKBM, tarif.maxTO, jumlahSiswa);
 
-                    // Cari Range Margin Target & Real dari seluruh kota di kelompok ini
                     const citiesInGroup = cityDb.filter(c => c.kelompok === kel);
                     let marginsTargetList = [];
                     let marginsRealList = [];
@@ -309,13 +309,11 @@
                 const ws1 = XLSX.utils.json_to_sheet(exportKelompok);
                 XLSX.utils.book_append_sheet(wb, ws1, "Per Kelompok Kota");
 
-                // SHEET 2: PER KOTA DETAIL (DENGAN PEMBANDING JUMSIS TARGET VS REAL)
                 const exportDetailKota = cityDb.map(c => {
                     const foundProd = db.find(d => d.produk === selectedProdComp && d.kelompok === c.kelompok && d.tahun === latestTA);
                     const hargaAcuan = draftProyeksi[c.kelompok] || (foundProd ? foundProd.harga : 0);
                     
                     const finTarget = calculateFinancials(hargaAcuan, c.tarifKBM, c.tarifTO, jumlahSiswa);
-                    
                     const jReal = getJumsisReal(c.kota, selectedProdComp);
                     const finReal = calculateFinancials(hargaAcuan, c.tarifKBM, c.tarifTO, jReal);
 
@@ -361,7 +359,7 @@
                     <div className="bg-slate-900 text-white p-6 flex flex-col lg:flex-row justify-between items-center gap-6">
                         <div>
                             <h1 className="text-2xl font-bold">Aplikasi Proyeksi & Kalkulator Margin Harga</h1>
-                            <p className="text-sm text-gray-400 mt-1">Sistem manajemen database harga, addons kelas, dan komparasi jumsis realisasi</p>
+                            <p className="text-sm text-gray-400 mt-1">Sistem manajemen database harga dinamis, addons, & komparasi jumsis realisasi</p>
                         </div>
                         <div className="flex flex-wrap bg-slate-800 p-2 rounded-xl border border-slate-700 gap-2">
                             <button onClick={() => setActiveMenu("input")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'input' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
@@ -427,7 +425,6 @@
                                 <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
                                         <h2 className="text-lg font-bold text-emerald-900">Database Kota & Honor Pengajar</h2>
-                                        <p className="text-sm text-emerald-700 mt-1">Kelola tarif kota dan upload data Jumsis Realisasi per kota.</p>
                                     </div>
                                     <div className="flex flex-wrap gap-3">
                                         <label className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md text-sm">
@@ -494,6 +491,7 @@
                                 <div className="flex flex-col md:flex-row justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-200 gap-4">
                                     <div>
                                         <h2 className="text-lg font-bold text-slate-900">Dashboard Komparasi & Kalkulator Profit</h2>
+                                        <p className="text-xs text-slate-500 mt-1">Menampilkan histori seluruh TA secara dinamis untuk produk: <span className="font-bold text-blue-600">{selectedProdComp}</span></p>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <span className="text-sm font-semibold text-gray-700">Pilih Produk:</span>
@@ -610,15 +608,18 @@
                                         <thead className="bg-gray-100 text-gray-700">
                                             <tr>
                                                 <th className="p-4 border-b">Kelompok Kota</th>
-                                                <th className="p-4 border-b">TA Terakhir</th>
-                                                <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA {targetTA}</th>
+                                                {/* DINAMIS: Menampilkan seluruh TA histori yang ada untuk produk ini */}
+                                                {listTahunUnik.map(ta => (
+                                                    <th key={ta} className="p-4 border-b text-blue-800 font-semibold">TA {ta}</th>
+                                                ))}
+                                                <th className="p-4 border-b bg-blue-50 text-blue-900 font-bold">Proyeksi TA {targetTA}</th>
                                                 <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income (Target)</th>
                                                 <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost Final</th>
                                                 <th className="p-4 border-b bg-purple-50 text-purple-900">Margin Bersih Akhir (%)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {listKelompokUnik.length === 0 ? <tr><td colSpan="6" className="p-6 text-center text-gray-400">Tidak ada data untuk produk ini.</td></tr> :
+                                            {listKelompokUnik.length === 0 ? <tr><td colSpan={listTahunUnik.length + 5} className="p-6 text-center text-gray-400">Tidak ada data untuk produk ini.</td></tr> :
                                                 listKelompokUnik.map((kel) => {
                                                     const getDataByTA = (ta) => db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
                                                     
@@ -630,7 +631,11 @@
                                                     return (
                                                         <tr key={kel} className="border-b hover:bg-gray-50">
                                                             <td className="p-4 font-bold text-gray-800">Kelompok {kel}</td>
-                                                            <td className="p-4 text-gray-600 font-medium">{getDataByTA(latestTA) ? formatRp(getDataByTA(latestTA).harga) : '-'}</td>
+                                                            {/* DINAMIS: Menampilkan harga dari masing-masing TA */}
+                                                            {listTahunUnik.map(ta => {
+                                                                const d = getDataByTA(ta);
+                                                                return <td key={ta} className="p-4 text-gray-600 text-xs font-medium">{d ? formatRp(d.harga) : '-'}</td>;
+                                                            })}
                                                             <td className="p-4 bg-blue-50/50">
                                                                 <input 
                                                                     type="text" 
