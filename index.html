@@ -181,7 +181,7 @@
                 return Math.max(0, currentPrice) * jumlahSiswa;
             };
 
-            // FUNGSI KALKULASI FINANSIAL (Base Cost -> + Pajak 2% -> + Biaya Lain-lain 10% dari hasil setelah pajak)
+            // FUNGSI KALKULASI FINANSIAL LENGKAP TERBARU
             const calculateFinancials = (hargaAcuan, maxKBM, maxTO) => {
                 const nettIncome = calculateNettIncomePerSiswa(hargaAcuan);
                 
@@ -191,18 +191,25 @@
 
                 // 2. Pajak Income 2% dari Nett Income
                 const pajakIncome = nettIncome * 0.02;
-
-                // 3. Cost setelah ditambah pajak income
                 const costWithTax = baseCost + pajakIncome;
 
-                // 4. Biaya Lain-lain 10% dari cost setelah pajak
+                // 3. Biaya Lain-lain 10% dari cost setelah pajak
                 const biayaLainLain = costWithTax * 0.10;
 
-                // 5. Total Cost Final = Cost with Tax + Biaya Lain-lain 10%
+                // 4. Total Cost Final
                 const totalCostFinal = costWithTax + biayaLainLain;
 
+                // 5. Laba Kotor (Gross Profit) sebelum pajak profit
                 const grossProfit = nettIncome - totalCostFinal;
-                const profitMargin = nettIncome > 0 ? (grossProfit / nettIncome) * 100 : 0;
+
+                // 6. Pajak Margin / Pajak Profit 25% (Hanya berlaku jika profit positif)
+                const pajakProfit = grossProfit > 0 ? grossProfit * 0.25 : 0;
+
+                // 7. Laba Bersih Akhir / Net Profit
+                const netProfit = grossProfit - pajakProfit;
+
+                // 8. Profit Margin Akhir (%)
+                const profitMargin = nettIncome > 0 ? (netProfit / nettIncome) * 100 : 0;
 
                 return {
                     nettIncome,
@@ -211,6 +218,8 @@
                     biayaLainLain,
                     totalCostFinal,
                     grossProfit,
+                    pajakProfit,
+                    netProfit,
                     profitMargin
                 };
             };
@@ -234,11 +243,13 @@
                     rowObj[`Proyeksi ${targetTA}`] = hargaAcuan;
                     rowObj["Nett Income"] = Math.round(fin.nettIncome);
                     rowObj["Base Cost"] = Math.round(fin.baseCost);
-                    rowObj["Pajak (2%)"] = Math.round(fin.pajakIncome);
+                    rowObj["Pajak Income (2%)"] = Math.round(fin.pajakIncome);
                     rowObj["Biaya Lain (10%)"] = Math.round(fin.biayaLainLain);
                     rowObj["Total Cost (Final)"] = Math.round(fin.totalCostFinal);
-                    rowObj["Margin (Rp)"] = Math.round(fin.grossProfit);
-                    rowObj["Margin (%)"] = parseFloat(fin.profitMargin.toFixed(2));
+                    rowObj["Profit Sebelum Pajak"] = Math.round(fin.grossProfit);
+                    rowObj["Pajak Profit (25%)"] = Math.round(fin.pajakProfit);
+                    rowObj["Margin Bersih (Rp)"] = Math.round(fin.netProfit);
+                    rowObj["Margin Akhir (%)"] = parseFloat(fin.profitMargin.toFixed(2));
                     return rowObj;
                 });
                 const ws1 = XLSX.utils.json_to_sheet(exportKelompok);
@@ -260,11 +271,13 @@
                         "Tarif TO Kota": c.tarifTO,
                         "Nett Income": Math.round(fin.nettIncome),
                         "Base Cost": Math.round(fin.baseCost),
-                        "Pajak (2%)": Math.round(fin.pajakIncome),
+                        "Pajak Income (2%)": Math.round(fin.pajakIncome),
                         "Biaya Lain (10%)": Math.round(fin.biayaLainLain),
                         "Total Cost (Final)": Math.round(fin.totalCostFinal),
-                        "Margin (Rp)": Math.round(fin.grossProfit),
-                        "Margin (%)": parseFloat(fin.profitMargin.toFixed(2))
+                        "Profit Sebelum Pajak": Math.round(fin.grossProfit),
+                        "Pajak Profit (25%)": Math.round(fin.pajakProfit),
+                        "Margin Bersih (Rp)": Math.round(fin.netProfit),
+                        "Margin Akhir (%)": parseFloat(fin.profitMargin.toFixed(2))
                     };
                 });
                 const ws2 = XLSX.utils.json_to_sheet(exportDetailKota);
@@ -278,14 +291,14 @@
                     <div className="bg-slate-900 text-white p-6 flex flex-col lg:flex-row justify-between items-center gap-6">
                         <div>
                             <h1 className="text-2xl font-bold">Aplikasi Proyeksi & Kalkulator Margin Harga</h1>
-                            <p className="text-sm text-gray-400 mt-1">Sistem manajemen database harga, honor pengajar, pajak 2%, dan biaya lain-lain 10%</p>
+                            <p className="text-sm text-gray-400 mt-1">Sistem manajemen database harga, honor pengajar, dan margin bersih (Pajak Profit 25%)</p>
                         </div>
                         <div className="flex flex-wrap bg-slate-800 p-2 rounded-xl border border-slate-700 gap-2">
                             <button onClick={() => setActiveMenu("input")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'input' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
                                 📂 1. Database Produk
                             </button>
                             <button onClick={() => setActiveMenu("kota")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'kota' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
-                                🏙️ 2. Database Kota & Honor
+                                🏙️️ 2. Database Kota & Honor
                             </button>
                             <button onClick={() => setActiveMenu("pembanding")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'pembanding' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
                                 📊 3. Kalkulator & Pembanding
@@ -438,7 +451,7 @@
                                         <input type="number" min="1" value={jumlahSiswa} onChange={(e) => setJumlahSiswa(parseInt(e.target.value) || 0)} className="w-full bg-white px-4 py-2 border border-blue-200 rounded-xl outline-none font-semibold" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-blue-900 mb-2">🏷️ 2. Diskon Beruntun (Max 3 Lapis)</label>
+                                        <label className="block text-sm font-bold text-blue-900 mb-2">🏷️️ 2. Diskon Beruntun (Max 3 Lapis)</label>
                                         <div className="space-y-2">
                                             {diskonList.map((disc, idx) => (
                                                 <div key={idx} className="flex gap-2">
@@ -470,8 +483,8 @@
                                                 <span className="text-xs text-blue-800 block font-medium">Jumlah Konsultasi (33% dari Tarif Pengajar):</span>
                                                 <input type="number" min="0" value={jumlahKonsultasi} onChange={(e) => setJumlahKonsultasi(parseInt(e.target.value) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs font-semibold" />
                                             </div>
-                                            <div className="pt-1 text-[11px] text-blue-900 font-semibold bg-blue-100/50 p-2 rounded-lg">
-                                                ➕ Base Cost ditambahkan Pajak 2% (dari Income), lalu totalnya ditambah Biaya Lain-lain 10%.
+                                            <div className="pt-1 text-[11px] text-blue-900 font-semibold bg-blue-100/50 p-2 rounded-lg leading-tight">
+                                                Telah memperhitungkan Pajak Income (2%), Biaya Lain (10%), serta pemotongan Pajak Profit (25%) pada hasil Margin Bersih.
                                             </div>
                                         </div>
                                     </div>
@@ -487,8 +500,8 @@
                                                 ))}
                                                 <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA {targetTA}</th>
                                                 <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income</th>
-                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Base + Pajak 2% + Lain 10%)</th>
-                                                <th className="p-4 border-b bg-purple-50 text-purple-900">Profit Margin</th>
+                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost Final</th>
+                                                <th className="p-4 border-b bg-purple-50 text-purple-900">Margin Bersih Akhir (%)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -521,13 +534,16 @@
                                                                 />
                                                             </td>
                                                             <td className="p-4 bg-emerald-50/40 font-bold text-emerald-700 text-xs">{formatRp(fin.nettIncome)}</td>
-                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Base Cost: ${formatRp(fin.baseCost)} + Pajak 2%: ${formatRp(fin.pajakIncome)} -> + Lain 10%: ${formatRp(fin.biayaLainLain)}`}>
+                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Pajak 2% + Biaya 10% dihitung`}>
                                                                 {formatRp(fin.totalCostFinal)}
                                                             </td>
-                                                            <td className="p-4 bg-purple-50/40 font-bold text-purple-700">
-                                                                <span className={`px-2 py-1 rounded-lg text-xs ${fin.profitMargin >= 30 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                                                    {fin.profitMargin.toFixed(1)}%
-                                                                </span>
+                                                            <td className="p-4 bg-purple-50/40 font-bold text-purple-700" title={`Profit Kotor: ${formatRp(fin.grossProfit)} - Pajak 25%: ${formatRp(fin.pajakProfit)} = Margin Bersih: ${formatRp(fin.netProfit)}`}>
+                                                                <div className="flex flex-col">
+                                                                    <span className={`px-2 py-1 rounded-lg text-xs self-start mb-1 ${fin.profitMargin >= 20 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                                        {fin.profitMargin.toFixed(1)}%
+                                                                    </span>
+                                                                    <span className="text-[10px] text-purple-900">Bersih: {formatRp(fin.netProfit)}</span>
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     );
