@@ -39,7 +39,7 @@
             const [activeMenu, setActiveMenu] = useState("input");
             
             const [selectedProdComp, setSelectedProdComp] = useState("TWT 12 SMA 4P");
-            const [draft27, setDraft27] = useState({});
+            const [draftProyeksi, setDraftProyeksi] = useState({});
 
             const [jumlahSiswa, setJumlahSiswa] = useState(15);
             const [diskonList, setDiskonList] = useState([
@@ -51,6 +51,9 @@
             const [biayaSiswaTotal, setBiayaSiswaTotal] = useState(3008475);
             const [biayaTetapKelas, setBiayaTetapKelas] = useState(5738252);
             
+            // Sesi Konsultasi (Biaya konsul = Jumlah Konsultasi * 33% dari Tarif Pengajar)
+            const [jumlahKonsultasi, setJumlahKonsultasi] = useState(2);
+
             const [kbmPrev, setKbmPrev] = useState(209);
             const [toPrev, setToPrev] = useState(20);
             const [kbmTarget, setKbmTarget] = useState(220);
@@ -63,23 +66,35 @@
 
             const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
 
-            const handleDownloadTemplateProduk = () => {
-                const templateData = [{ Tahun_Ajaran: "26/27", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 13700000, Jumlah_KBM: 209, Jumlah_TO: 20 }];
-                const ws = XLSX.utils.json_to_sheet(templateData);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "TemplateProduk");
-                XLSX.writeFile(wb, "template_database_produk.xlsx");
+            // Deteksi Tahun Ajaran (TA) terakhir yang ada di database untuk produk terpilih, lalu tentukan TA Proyeksi (TA + 1)
+            const listTahunUnik = [...new Set(db.map(d => d.tahun))].sort();
+            const latestTA = listTahunUnik.length > 0 ? listTahunUnik[listTahunUnik.length - 1] : "26/27";
+            
+            // Fungsi penambahan 1 tahun ajaran (misal "26/27" -> "27/28")
+            const getNextTA = (taStr) => {
+                const parts = taStr.split('/');
+                if (parts.length === 2) {
+                    const y1 = parseInt(parts[0], 10);
+                    const y2 = parseInt(parts[1], 10);
+                    return `${String(y1 + 1).padStart(2, '0')}/${String(y2 + 1).padStart(2, '0')}`;
+                }
+                return "27/28";
             };
+            const targetTA = getPrevOrNextTA(latestTA, 'next');
 
-            const handleDownloadTemplateKota = () => {
-                const templateData = [{ Nama_Kota: "Jakarta", Kelompok_Kota: 1, Tarif_KBM: 186713, Tarif_TO: 40000 }];
-                const ws = XLSX.utils.json_to_sheet(templateData);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "TemplateKota");
-                XLSX.writeFile(wb, "template_database_kota_pengajar.xlsx");
-            };
+            function getPrevOrNextTA(ta, direction) {
+                const parts = ta.split('/');
+                if (parts.length === 2) {
+                    let y1 = parseInt(parts[0], 10);
+                    let y2 = parseInt(parts[1], 10);
+                    if (direction === 'next') { y1++; y2++; }
+                    else { y1--; y2--; }
+                    return `${String(y1).padStart(2, '0')}/${String(y2).padStart(2, '0')}`;
+                }
+                return ta;
+            }
+            const prevTA = getPrevOrNextTA(latestTA, 'prev');
 
-            // Fungsi pembersih format tahun ajaran agar seragam (misal "2026/2027" atau "TA 26/27" jadi "26/27")
             const cleanYear = (rawYear) => {
                 const str = String(rawYear).trim();
                 const match = str.match(/(\d{2}\/\d{2})/);
@@ -112,18 +127,10 @@
                         }));
 
                         setDb(formattedData);
-                        
-                        // Otomatis pilih produk pertama yang ada di file baru agar langsung muncul di tab kalkulator
                         const products = [...new Set(formattedData.map(d => d.produk))];
-                        if (products.length > 0) {
-                            setSelectedProdComp(products[0]);
-                        }
-
-                        alert(`Berhasil memuat ${formattedData.length} baris data produk! Silakan cek Tab 3.`);
-                    } catch (error) { 
-                        console.error(error);
-                        alert("Gagal membaca file Excel."); 
-                    }
+                        if (products.length > 0) setSelectedProdComp(products[0]);
+                        alert(`Berhasil memuat ${formattedData.length} baris data produk!`);
+                    } catch (error) { alert("Gagal membaca file Excel."); }
                 };
                 reader.readAsArrayBuffer(file);
             };
@@ -156,12 +163,12 @@
             const handleAutoGenerate = () => {
                 const newDrafts = {};
                 listKelompokUnik.forEach(kel => {
-                    const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === "26/27");
+                    const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === latestTA);
                     const baseHarga = found ? found.harga : 10000000;
                     newDrafts[kel] = Math.round(baseHarga * (1 + persenKenaikan / 100));
                 });
-                setDraft27(newDrafts);
-                alert(`Proyeksi harga berhasil digenerate naik ${persenKenaikan}%!`);
+                setDraftProyeksi(newDrafts);
+                alert(`Proyeksi harga ${targetTA} berhasil digenerate naik ${persenKenaikan}% dari TA ${latestTA}!`);
             };
 
             const listProdukUnik = [...new Set(db.map(item => item.produk))];
@@ -175,28 +182,60 @@
                 return { maxKBM, maxTO };
             };
 
+            // DUAL-FORMAT EXPORT (1. Per Kelompok Kota, 2. Per Kota Detail)
             const handleExportComp = () => {
-                const exportData = listKelompokUnik.map(kel => {
+                const wb = XLSX.utils.book_new();
+
+                // Sheet 1: Per Kelompok Kota
+                const exportKelompok = listKelompokUnik.map(kel => {
                     const getVal = (ta) => {
                         const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
                         return found ? found.harga : 0;
                     };
                     const tarif = getMaxTarifByKelompok(kel);
+                    const hargaAcuan = draftProyeksi[kel] || getVal(latestTA) || 0;
+                    const gross = hargaAcuan * jumlahSiswa;
+                    const cost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * tarif.maxKBM) + (toTarget * tarif.maxTO) + (jumlahKonsultasi * (tarif.maxKBM * 0.33));
+                    const marginRp = gross - cost;
+                    const marginPct = gross > 0 ? (marginRp / gross) * 100 : 0;
+
+                    let rowObj = { "Kelompok Kota": `Kelompok ${kel}`, "Produk": selectedProdComp };
+                    listTahunUnik.forEach(ta => { rowObj[`TA ${ta}`] = getVal(ta); });
+                    rowObj[`Proyeksi ${targetTA}`] = hargaAcuan;
+                    rowObj["Total Cost"] = cost;
+                    rowObj["Margin (Rp)"] = marginRp;
+                    rowObj["Margin (%)"] = parseFloat(marginPct.toFixed(2));
+                    return rowObj;
+                });
+                const ws1 = XLSX.utils.json_to_sheet(exportKelompok);
+                XLSX.utils.book_append_sheet(wb, ws1, "Per Kelompok Kota");
+
+                // Sheet 2: Per Kota Detail
+                const exportDetailKota = cityDb.map(c => {
+                    const foundProd = db.find(d => d.produk === selectedProdComp && d.kelompok === c.kelompok && d.tahun === latestTA);
+                    const hargaAcuan = draftProyeksi[c.kelompok] || (foundProd ? foundProd.harga : 0);
+                    const gross = hargaAcuan * jumlahSiswa;
+                    // Biaya konsul individu kota = jumlahKonsultasi * (c.tarifKBM * 0.33)
+                    const cost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * c.tarifKBM) + (toTarget * c.tarifTO) + (jumlahKonsultasi * (c.tarifKBM * 0.33));
+                    const marginRp = gross - cost;
+                    const marginPct = gross > 0 ? (marginRp / gross) * 100 : 0;
+
                     return {
-                        "Kelompok Kota": `Kelompok ${kel}`,
+                        "Nama Kota": c.kota,
+                        "Kelompok": c.kelompok,
                         "Produk": selectedProdComp,
-                        "TA 24/25": getVal("24/25"),
-                        "TA 25/26": getVal("25/26"),
-                        "TA 26/27": getVal("26/27"),
-                        "Proyeksi TA 27/28": draft27[kel] || 0,
-                        "Target KBM": kbmTarget,
-                        "Target TO": toTarget
+                        "Harga Acuan": hargaAcuan,
+                        "Tarif KBM Kota": c.tarifKBM,
+                        "Tarif TO Kota": c.tarifTO,
+                        "Total Cost": cost,
+                        "Margin (Rp)": marginRp,
+                        "Margin (%)": parseFloat(marginPct.toFixed(2))
                     };
                 });
-                const ws = XLSX.utils.json_to_sheet(exportData);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "KomparasiMargin");
-                XLSX.writeFile(wb, `Komparasi_${selectedProdComp.replace(/\s+/g, '_')}.xlsx`);
+                const ws2 = XLSX.utils.json_to_sheet(exportDetailKota);
+                XLSX.utils.book_append_sheet(wb, ws2, "Per Kota Detail");
+
+                XLSX.writeFile(wb, `Komparasi_Margin_${selectedProdComp.replace(/\s+/g, '_')}.xlsx`);
             };
 
             return (
@@ -228,9 +267,8 @@
                                         <p className="text-sm text-blue-700 mt-1">Kelola data harga, volume KBM, dan TO per tahun ajaran.</p>
                                     </div>
                                     <div className="flex flex-wrap gap-3">
-                                        <button onClick={handleDownloadTemplateProduk} className="bg-white border border-blue-300 text-blue-700 px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm">📥 Download Template</button>
                                         <label className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md text-sm">
-                                            📁 Upload Excel
+                                            📁 Upload Excel Produk
                                             <input type="file" accept=".xlsx, .xls, .csv" onChange={handleUploadProduk} className="hidden" />
                                         </label>
                                         {db.length > 0 && <button onClick={() => setDb([])} className="bg-red-50 text-red-600 border border-red-200 px-4 py-2.5 rounded-xl font-bold text-sm">🗑️ Reset</button>}
@@ -272,10 +310,9 @@
                                 <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
                                         <h2 className="text-lg font-bold text-emerald-900">Database Kota & Honor Pengajar</h2>
-                                        <p className="text-sm text-emerald-700 mt-1">Sistem otomatis mengambil tarif <strong>tertinggi</strong> dari setiap kelompok kota untuk simulasi cost.</p>
+                                        <p className="text-sm text-emerald-700 mt-1">Sistem otomatis mengambil tarif <strong>tertinggi</strong> dari setiap kelompok kota.</p>
                                     </div>
                                     <div className="flex flex-wrap gap-3">
-                                        <button onClick={handleDownloadTemplateKota} className="bg-white border border-emerald-300 text-emerald-700 px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm">📥 Download Template Kota</button>
                                         <label className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md text-sm">
                                             📁 Upload Excel Kota
                                             <input type="file" accept=".xlsx, .xls, .csv" onChange={handleUploadKota} className="hidden" />
@@ -313,22 +350,22 @@
                                 <div className="flex flex-col md:flex-row justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-200 gap-4">
                                     <div>
                                         <h2 className="text-lg font-bold text-slate-900">Dashboard Komparasi & Kalkulator Profit</h2>
-                                        <p className="text-sm text-slate-600">Cost KBM & TO otomatis menggunakan tarif tertinggi dari database kota.</p>
+                                        <p className="text-sm text-slate-600">Proyeksi otomatis menggunakan TA terbaru <strong>({latestTA} $\rightarrow$ {targetTA})</strong>.</p>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <span className="text-sm font-semibold text-gray-700">Pilih Produk:</span>
                                         <select value={selectedProdComp} onChange={(e) => setSelectedProdComp(e.target.value)} className="bg-white border border-gray-300 rounded-xl px-4 py-2 font-medium shadow-sm outline-none text-sm">
                                             {listProdukUnik.map(p => <option key={p} value={p}>{p}</option>)}
                                         </select>
-                                        <button onClick={handleExportComp} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm">📊 Export</button>
+                                        <button onClick={handleExportComp} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm">📊 Export Dual-Format</button>
                                     </div>
                                 </div>
 
                                 <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex flex-col lg:flex-row justify-between items-center gap-6">
                                     <div>
-                                        <h3 className="text-sm font-bold text-amber-900 mb-1">📈 Analisis Volume & Saran Kenaikan (TA 26/27 vs Proyeksi 27/28)</h3>
+                                        <h3 className="text-sm font-bold text-amber-900 mb-1">📈 Analisis Volume & Saran Kenaikan (TA {latestTA} vs Proyeksi {targetTA})</h3>
                                         <p className="text-xs text-amber-700">
-                                            Saran Kenaikan Volume: <span className="font-bold text-blue-700">KBM naik {persenKenaikanKBM}%</span> | <span className="font-bold text-blue-700">TO naik {persenKenaikanTO}%</span>
+                                            Saran Kenaikan: <span className="font-bold text-blue-700">KBM naik {persenKenaikanKBM}%</span> | <span className="font-bold text-blue-700">TO naik {persenKenaikanTO}%</span>
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -349,7 +386,7 @@
 
                                 <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div className="text-sm text-indigo-900">
-                                        <span className="font-bold">⚡ Auto-Generate Harga:</span> Naikkan seluruh harga proyeksi secara massal berdasarkan persentase.
+                                        <span className="font-bold">⚡ Auto-Generate Harga:</span> Naikkan harga proyeksi {targetTA} berdasarkan TA terakhir ({latestTA}).
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <input type="number" value={persenKenaikan} onChange={(e) => setPersenKenaikan(parseFloat(e.target.value) || 0)} className="w-20 bg-white px-3 py-1.5 border border-indigo-200 rounded-xl text-sm text-center font-bold" />
@@ -394,6 +431,10 @@
                                                 <span className="text-xs text-blue-800 block font-medium">Biaya Tetap Kelas (Gedung/Listrik):</span>
                                                 <input type="text" value={formatRp(biayaTetapKelas).replace('Rp', '').trim()} onChange={(e) => setBiayaTetapKelas(parseInt(e.target.value.replace(/\D/g, '')) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs" />
                                             </div>
+                                            <div>
+                                                <span className="text-xs text-blue-800 block font-medium">Jumlah Konsultasi (33% dari Tarif KBM):</span>
+                                                <input type="number" min="0" value={jumlahKonsultasi} onChange={(e) => setJumlahKonsultasi(parseInt(e.target.value) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs font-semibold" />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -403,25 +444,21 @@
                                         <thead className="bg-gray-100 text-gray-700">
                                             <tr>
                                                 <th className="p-4 border-b">Kelompok Kota</th>
-                                                <th className="p-4 border-b">TA 24/25</th>
-                                                <th className="p-4 border-b">TA 25/26</th>
-                                                <th className="p-4 border-b">TA 26/27</th>
-                                                <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA 27/28</th>
+                                                {listTahunUnik.map(ta => (
+                                                    <th key={ta} className="p-4 border-b">TA {ta}</th>
+                                                ))}
+                                                <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA {targetTA}</th>
                                                 <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income</th>
-                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Target KBM & TO)</th>
+                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Auto Konsul 33%)</th>
                                                 <th className="p-4 border-b bg-purple-50 text-purple-900">Profit Margin</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {listKelompokUnik.length === 0 ? <tr><td colSpan="8" className="p-6 text-center text-gray-400">Tidak ada data untuk produk ini.</td></tr> :
+                                            {listKelompokUnik.length === 0 ? <tr><td colSpan={listTahunUnik.length + 5} className="p-6 text-center text-gray-400">Tidak ada data untuk produk ini.</td></tr> :
                                                 listKelompokUnik.map((kel) => {
                                                     const getDataByTA = (ta) => db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
                                                     
-                                                    const d24 = getDataByTA("24/25");
-                                                    const d25 = getDataByTA("25/26");
-                                                    const d26 = getDataByTA("26/27");
-
-                                                    const hargaAcuan = draft27[kel] || (d26 ? d26.harga : 0);
+                                                    const hargaAcuan = draftProyeksi[kel] || (getDataByTA(latestTA) ? getDataByTA(latestTA).harga : 0);
                                                     const grossIncome = hargaAcuan * jumlahSiswa;
 
                                                     let totalDiskon = 0;
@@ -432,7 +469,9 @@
                                                     const nettIncome = Math.max(0, grossIncome - totalDiskon);
 
                                                     const maxTarif = getMaxTarifByKelompok(kel);
-                                                    const totalCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxTarif.maxKBM) + (toTarget * maxTarif.maxTO);
+                                                    // Total Cost = Biaya Siswa + Biaya Tetap + (KBM * Tarif) + (TO * Tarif) + (Konsultasi * 33% Tarif KBM)
+                                                    const biayaKonsultasiTotal = jumlahKonsultasi * (maxTarif.maxKBM * 0.33);
+                                                    const totalCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxTarif.maxKBM) + (toTarget * maxTarif.maxTO) + biayaKonsultasiTotal;
                                                     
                                                     const grossProfit = nettIncome - totalCost;
                                                     const profitMargin = nettIncome > 0 ? (grossProfit / nettIncome) * 100 : 0;
@@ -440,23 +479,24 @@
                                                     return (
                                                         <tr key={kel} className="border-b hover:bg-gray-50">
                                                             <td className="p-4 font-bold text-gray-800">Kelompok {kel}</td>
-                                                            <td className="p-4 text-gray-600">{d24 ? formatRp(d24.harga) : '-'}</td>
-                                                            <td className="p-4 text-gray-600">{d25 ? formatRp(d25.harga) : '-'}</td>
-                                                            <td className="p-4 text-gray-900 font-semibold">{d26 ? formatRp(d26.harga) : '-'}</td>
+                                                            {listTahunUnik.map(ta => {
+                                                                const d = getDataByTA(ta);
+                                                                return <td key={ta} className="p-4 text-gray-600 text-xs">{d ? formatRp(d.harga) : '-'}</td>;
+                                                            })}
                                                             <td className="p-4 bg-blue-50/50">
                                                                 <input 
                                                                     type="text" 
                                                                     placeholder="Harga baru..." 
-                                                                    value={draft27[kel] ? formatRp(draft27[kel]).replace('Rp', '').trim() : ''}
+                                                                    value={draftProyeksi[kel] ? formatRp(draftProyeksi[kel]).replace('Rp', '').trim() : ''}
                                                                     onChange={(e) => {
                                                                         const val = parseInt(e.target.value.replace(/\D/g, ''), 10) || 0;
-                                                                        setDraft27({...draft27, [kel]: val});
+                                                                        setDraftProyeksi({...draftProyeksi, [kel]: val});
                                                                     }}
                                                                     className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none text-sm"
                                                                 />
                                                             </td>
                                                             <td className="p-4 bg-emerald-50/40 font-bold text-emerald-700 text-xs">{formatRp(nettIncome)}</td>
-                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Gunakan Tarif KBM Max: ${formatRp(maxTarif.maxKBM)}, TO Max: ${formatRp(maxTarif.maxTO)}`}>
+                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Konsul 33% dari max KBM (${formatRp(maxTarif.maxKBM)})`}>
                                                                 {formatRp(totalCost)}
                                                             </td>
                                                             <td className="p-4 bg-purple-50/40 font-bold text-purple-700">
