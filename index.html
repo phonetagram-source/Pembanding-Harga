@@ -36,6 +36,7 @@
         function App() {
             const [db, setDb] = useState(initialDatabase);
             const [cityDb, setCityDb] = useState(initialCityDatabase);
+            const [realisasiSiswaDb, setRealisasiSiswaDb] = useState([]); // Database Jumsis Realisasi per Kota & Produk
             const [activeMenu, setActiveMenu] = useState("input");
             
             const [selectedProdComp, setSelectedProdComp] = useState("TWT 12 SMA 4P");
@@ -52,7 +53,6 @@
             const [biayaTetapKelas, setBiayaTetapKelas] = useState(5738252);
             const [jumlahKonsultasi, setJumlahKonsultasi] = useState(2);
 
-            // STATE UNTUK ADD-ONS BARU
             const [addons, setAddons] = useState({
                 videoEkstra: { checked: false, count: 0 },
                 videoSoal: { checked: false, count: 0 },
@@ -148,8 +148,33 @@
                             tarifTO: parseInt(String(row.Tarif_TO || row.tarifTO || 0).replace(/\D/g, '')) || 0
                         }));
                         setCityDb(formattedCityData);
-                        alert(`Berhasil memuat ${formattedCityData.length} data kota & honor pengajar.`);
+                        alert(`Berhasil memuat ${formattedCityData.length} data kota & honor.`);
                     } catch (error) { alert("Gagal membaca file Excel kota."); }
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            // UPLOAD JUMSIS REALISASI PER KOTA
+            const handleUploadRealisasiSiswa = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const dataBuffer = new Uint8Array(evt.target.result);
+                        const workbook = XLSX.read(dataBuffer, { type: 'array' });
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                        if (jsonData.length === 0) { alert("File kosong!"); return; }
+
+                        const formattedRealData = jsonData.map(row => ({
+                            kota: String(row.Nama_Kota || row.kota || "").trim(),
+                            produk: String(row.Nama_Produk || row.produk || "").trim(),
+                            jumsisReal: parseInt(String(row.Jumsis_Real || row.jumsisReal || row.jumlah_siswa || 0).replace(/\D/g, '')) || 0
+                        }));
+                        setRealisasiSiswaDb(formattedRealData);
+                        alert(`Berhasil memuat ${formattedRealData.length} data jumsis realisasi!`);
+                    } catch (error) { alert("Gagal membaca file Excel realisasi siswa."); }
                 };
                 reader.readAsArrayBuffer(file);
             };
@@ -176,7 +201,7 @@
                 return { maxKBM, maxTO };
             };
 
-            const calculateNettIncomePerSiswa = (baseHarga) => {
+            const calculateNettIncomePerSiswa = (baseHarga, jSiswa) => {
                 let currentPrice = baseHarga;
                 diskonList.forEach(disc => {
                     if (disc.value > 0) {
@@ -187,7 +212,7 @@
                         }
                     }
                 });
-                return Math.max(0, currentPrice) * jumlahSiswa;
+                return Math.max(0, currentPrice) * jSiswa;
             };
 
             const getAddonsCost = (maxKBM) => {
@@ -200,36 +225,25 @@
                 return addTotal;
             };
 
-            const calculateFinancials = (hargaAcuan, maxKBM, maxTO) => {
-                const nettIncome = calculateNettIncomePerSiswa(hargaAcuan);
-                
-                // Hitung Addons
+            const calculateFinancials = (hargaAcuan, maxKBM, maxTO, jSiswa) => {
+                if (jSiswa <= 0) {
+                    return { nettIncome: 0, pajakIncome: 0, addonsCost: 0, baseCost: 0, biayaLainLain: 0, totalCostFinal: 0, grossProfit: 0, pajakProfit: 0, netProfit: 0, profitMargin: 0 };
+                }
+
+                const nettIncome = calculateNettIncomePerSiswa(hargaAcuan, jSiswa);
                 const addonsCost = getAddonsCost(maxKBM);
 
-                // 1. Base Cost Dasar
                 const biayaKonsultasi = maxKBM * 0.33 * jumlahKonsultasi;
-                const baseCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxKBM) + (toTarget * maxTO) + biayaKonsultasi + addonsCost;
+                const baseCost = (biayaSiswaTotal * jSiswa) + biayaTetapKelas + (kbmTarget * maxKBM) + (toTarget * maxTO) + biayaKonsultasi + addonsCost;
 
-                // 2. Pajak Income 2% dari Nett Income
                 const pajakIncome = nettIncome * 0.02;
                 const costWithTax = baseCost + pajakIncome;
-
-                // 3. Biaya Lain-lain 10% dari cost setelah pajak
                 const biayaLainLain = costWithTax * 0.10;
-
-                // 4. Total Cost Final
                 const totalCostFinal = costWithTax + biayaLainLain;
 
-                // 5. Laba Kotor (Gross Profit) sebelum pajak profit
                 const grossProfit = nettIncome - totalCostFinal;
-
-                // 6. Pajak Margin / Pajak Profit 25% (Hanya berlaku jika profit positif)
                 const pajakProfit = grossProfit > 0 ? grossProfit * 0.25 : 0;
-
-                // 7. Laba Bersih Akhir / Net Profit
                 const netProfit = grossProfit - pajakProfit;
-
-                // 8. Profit Margin Akhir (%)
                 const profitMargin = nettIncome > 0 ? (netProfit / nettIncome) * 100 : 0;
 
                 return {
@@ -237,9 +251,16 @@
                 };
             };
 
+            // MENDAPATKAN JUMSIS REALISASI DARI DATABASE UPLOAD (DEFAULT 0 JIKA BELUM ADA)
+            const getJumsisReal = (namaKota, produkNama) => {
+                const found = realisasiSiswaDb.find(r => r.kota.toLowerCase() === namaKota.toLowerCase() && r.produk.toLowerCase() === produkNama.toLowerCase());
+                return found ? found.jumsisReal : 0;
+            };
+
             const handleExportComp = () => {
                 const wb = XLSX.utils.book_new();
 
+                // SHEET 1: PER KELOMPOK KOTA (DENGAN RANGE MARGIN TARGET & REAL)
                 const exportKelompok = listKelompokUnik.map(kel => {
                     const getVal = (ta) => {
                         const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
@@ -247,30 +268,56 @@
                     };
                     const tarif = getMaxTarifByKelompok(kel);
                     const hargaAcuan = draftProyeksi[kel] || getVal(latestTA) || 0;
-                    const fin = calculateFinancials(hargaAcuan, tarif.maxKBM, tarif.maxTO);
+                    
+                    // Hitung dengan Jumsis Target (Kalkulator)
+                    const finTarget = calculateFinancials(hargaAcuan, tarif.maxKBM, tarif.maxTO, jumlahSiswa);
+
+                    // Cari Range Margin Target & Real dari seluruh kota di kelompok ini
+                    const citiesInGroup = cityDb.filter(c => c.kelompok === kel);
+                    let marginsTargetList = [];
+                    let marginsRealList = [];
+
+                    citiesInGroup.forEach(c => {
+                        const cityFinTarget = calculateFinancials(hargaAcuan, c.tarifKBM, c.tarifTO, jumlahSiswa);
+                        marginsTargetList.push(cityFinTarget.profitMargin);
+
+                        const jReal = getJumsisReal(c.kota, selectedProdComp);
+                        const cityFinReal = calculateFinancials(hargaAcuan, c.tarifKBM, c.tarifTO, jReal);
+                        marginsRealList.push(cityFinReal.profitMargin);
+                    });
+
+                    const minTarget = marginsTargetList.length > 0 ? Math.min(...marginsTargetList).toFixed(1) : 0;
+                    const maxTarget = marginsTargetList.length > 0 ? Math.max(...marginsTargetList).toFixed(1) : 0;
+                    const rangeTargetStr = `${minTarget}% - ${maxTarget}%`;
+
+                    const minReal = marginsRealList.length > 0 ? Math.min(...marginsRealList).toFixed(1) : 0;
+                    const maxReal = marginsRealList.length > 0 ? Math.max(...marginsRealList).toFixed(1) : 0;
+                    const rangeRealStr = `${minReal}% - ${maxReal}%`;
 
                     let rowObj = { "Kelompok Kota": `Kelompok ${kel}`, "Produk": selectedProdComp };
                     listTahunUnik.forEach(ta => { rowObj[`TA ${ta}`] = getVal(ta); });
                     rowObj[`Proyeksi ${targetTA}`] = hargaAcuan;
-                    rowObj["Nett Income"] = Math.round(fin.nettIncome);
-                    rowObj["Add-ons Cost"] = Math.round(fin.addonsCost);
-                    rowObj["Base Cost (Inc. Addons)"] = Math.round(fin.baseCost);
-                    rowObj["Pajak Income (2%)"] = Math.round(fin.pajakIncome);
-                    rowObj["Biaya Lain (10%)"] = Math.round(fin.biayaLainLain);
-                    rowObj["Total Cost Final"] = Math.round(fin.totalCostFinal);
-                    rowObj["Profit Sebelum Pajak"] = Math.round(fin.grossProfit);
-                    rowObj["Pajak Profit (25%)"] = Math.round(fin.pajakProfit);
-                    rowObj["Margin Bersih (Rp)"] = Math.round(fin.netProfit);
-                    rowObj["Margin Akhir (%)"] = parseFloat(fin.profitMargin.toFixed(2));
+                    rowObj["Jumsis Target"] = jumlahSiswa;
+                    rowObj["Nett Income (Target)"] = Math.round(finTarget.nettIncome);
+                    rowObj["Total Cost Final (Target)"] = Math.round(finTarget.totalCostFinal);
+                    rowObj["Margin Bersih (Target)"] = Math.round(finTarget.netProfit);
+                    rowObj["Margin Akhir % (Target)"] = parseFloat(finTarget.profitMargin.toFixed(2));
+                    rowObj["Range Margin % (Target Antar Kota)"] = rangeTargetStr;
+                    rowObj["Range Margin % (Real Antar Kota)"] = rangeRealStr;
                     return rowObj;
                 });
                 const ws1 = XLSX.utils.json_to_sheet(exportKelompok);
                 XLSX.utils.book_append_sheet(wb, ws1, "Per Kelompok Kota");
 
+                // SHEET 2: PER KOTA DETAIL (DENGAN PEMBANDING JUMSIS TARGET VS REAL)
                 const exportDetailKota = cityDb.map(c => {
                     const foundProd = db.find(d => d.produk === selectedProdComp && d.kelompok === c.kelompok && d.tahun === latestTA);
                     const hargaAcuan = draftProyeksi[c.kelompok] || (foundProd ? foundProd.harga : 0);
-                    const fin = calculateFinancials(hargaAcuan, c.tarifKBM, c.tarifTO);
+                    
+                    const finTarget = calculateFinancials(hargaAcuan, c.tarifKBM, c.tarifTO, jumlahSiswa);
+                    
+                    const jReal = getJumsisReal(c.kota, selectedProdComp);
+                    const finReal = calculateFinancials(hargaAcuan, c.tarifKBM, c.tarifTO, jReal);
 
                     return {
                         "Nama Kota": c.kota,
@@ -279,22 +326,22 @@
                         "Harga Acuan": hargaAcuan,
                         "Tarif KBM Kota": c.tarifKBM,
                         "Tarif TO Kota": c.tarifTO,
-                        "Nett Income": Math.round(fin.nettIncome),
-                        "Add-ons Cost": Math.round(fin.addonsCost),
-                        "Base Cost (Inc. Addons)": Math.round(fin.baseCost),
-                        "Pajak Income (2%)": Math.round(fin.pajakIncome),
-                        "Biaya Lain (10%)": Math.round(fin.biayaLainLain),
-                        "Total Cost Final": Math.round(fin.totalCostFinal),
-                        "Profit Sebelum Pajak": Math.round(fin.grossProfit),
-                        "Pajak Profit (25%)": Math.round(fin.pajakProfit),
-                        "Margin Bersih (Rp)": Math.round(fin.netProfit),
-                        "Margin Akhir (%)": parseFloat(fin.profitMargin.toFixed(2))
+                        "Jumsis Target": jumlahSiswa,
+                        "Nett Income (Target)": Math.round(finTarget.nettIncome),
+                        "Total Cost (Target)": Math.round(finTarget.totalCostFinal),
+                        "Margin Bersih (Target)": Math.round(finTarget.netProfit),
+                        "Margin % (Target)": parseFloat(finTarget.profitMargin.toFixed(2)),
+                        "Jumsis Realisasi": jReal,
+                        "Nett Income (Real)": Math.round(finReal.nettIncome),
+                        "Total Cost (Real)": Math.round(finReal.totalCostFinal),
+                        "Margin Bersih (Real)": Math.round(finReal.netProfit),
+                        "Margin % (Real)": parseFloat(finReal.profitMargin.toFixed(2))
                     };
                 });
                 const ws2 = XLSX.utils.json_to_sheet(exportDetailKota);
                 XLSX.utils.book_append_sheet(wb, ws2, "Per Kota Detail");
 
-                XLSX.writeFile(wb, `Komparasi_Margin_${selectedProdComp.replace(/\s+/g, '_')}.xlsx`);
+                XLSX.writeFile(wb, `Komparasi_Margin_Lengkap_${selectedProdComp.replace(/\s+/g, '_')}.xlsx`);
             };
 
             const toggleAddon = (key) => {
@@ -314,7 +361,7 @@
                     <div className="bg-slate-900 text-white p-6 flex flex-col lg:flex-row justify-between items-center gap-6">
                         <div>
                             <h1 className="text-2xl font-bold">Aplikasi Proyeksi & Kalkulator Margin Harga</h1>
-                            <p className="text-sm text-gray-400 mt-1">Sistem manajemen database harga, addons kelas, dan perhitungan pajak final</p>
+                            <p className="text-sm text-gray-400 mt-1">Sistem manajemen database harga, addons kelas, dan komparasi jumsis realisasi</p>
                         </div>
                         <div className="flex flex-wrap bg-slate-800 p-2 rounded-xl border border-slate-700 gap-2">
                             <button onClick={() => setActiveMenu("input")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'input' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
@@ -380,38 +427,66 @@
                                 <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
                                         <h2 className="text-lg font-bold text-emerald-900">Database Kota & Honor Pengajar</h2>
+                                        <p className="text-sm text-emerald-700 mt-1">Kelola tarif kota dan upload data Jumsis Realisasi per kota.</p>
                                     </div>
                                     <div className="flex flex-wrap gap-3">
                                         <label className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md text-sm">
                                             📁 Upload Excel Kota
                                             <input type="file" accept=".xlsx, .xls, .csv" onChange={handleUploadKota} className="hidden" />
                                         </label>
-                                        {cityDb.length > 0 && <button onClick={() => setCityDb([])} className="bg-red-50 text-red-600 border border-red-200 px-4 py-2.5 rounded-xl font-bold text-sm">🗑️ Reset Kota</button>}
+                                        <label className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md text-sm">
+                                            📊 Upload Jumsis Realisasi
+                                            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleUploadRealisasiSiswa} className="hidden" />
+                                        </label>
                                     </div>
                                 </div>
-                                <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm max-h-[450px] overflow-y-auto">
-                                    <table className="w-full text-left border-collapse text-sm">
-                                        <thead className="bg-gray-100 text-gray-700 sticky top-0">
-                                            <tr>
-                                                <th className="p-3 border-b">Nama Kota</th>
-                                                <th className="p-3 border-b">Kelompok Kota</th>
-                                                <th className="p-3 border-b">Tarif KBM per Sesi</th>
-                                                <th className="p-3 border-b">Tarif TO per Sesi</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {cityDb.length === 0 ? <tr><td colSpan="4" className="p-6 text-center text-gray-400">Belum ada data kota.</td></tr> :
-                                                cityDb.map((item, idx) => (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm max-h-[400px] overflow-y-auto">
+                                        <h3 className="bg-gray-100 p-3 font-bold text-xs text-gray-700">Daftar Kota & Tarif</h3>
+                                        <table className="w-full text-left border-collapse text-xs">
+                                            <thead className="bg-gray-50 text-gray-600 sticky top-0">
+                                                <tr>
+                                                    <th className="p-2 border-b">Nama Kota</th>
+                                                    <th className="p-2 border-b">Kel.</th>
+                                                    <th className="p-2 border-b">Tarif KBM</th>
+                                                    <th className="p-2 border-b">Tarif TO</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {cityDb.map((item, idx) => (
                                                     <tr key={idx} className="border-b hover:bg-gray-50">
-                                                        <td className="p-3 font-bold text-slate-800">{item.kota}</td>
-                                                        <td className="p-3 text-blue-600 font-semibold">Kelompok {item.kelompok}</td>
-                                                        <td className="p-3 text-gray-900">{formatRp(item.tarifKBM)}</td>
-                                                        <td className="p-3 text-gray-900">{formatRp(item.tarifTO)}</td>
+                                                        <td className="p-2 font-bold text-slate-800">{item.kota}</td>
+                                                        <td className="p-2 text-blue-600 font-semibold">{item.kelompok}</td>
+                                                        <td className="p-2 text-gray-900">{formatRp(item.tarifKBM)}</td>
+                                                        <td className="p-2 text-gray-900">{formatRp(item.tarifTO)}</td>
                                                     </tr>
-                                                ))
-                                            }
-                                        </tbody>
-                                    </table>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm max-h-[400px] overflow-y-auto">
+                                        <h3 className="bg-purple-50 p-3 font-bold text-xs text-purple-900">Database Jumsis Realisasi (Upload)</h3>
+                                        <table className="w-full text-left border-collapse text-xs">
+                                            <thead className="bg-purple-100/50 text-purple-800 sticky top-0">
+                                                <tr>
+                                                    <th className="p-2 border-b">Nama Kota</th>
+                                                    <th className="p-2 border-b">Produk</th>
+                                                    <th className="p-2 border-b">Jumsis Real</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {realisasiSiswaDb.length === 0 ? <tr><td colSpan="3" className="p-6 text-center text-gray-400">Belum ada file jumsis realisasi di-upload. (Default: 0)</td></tr> :
+                                                    realisasiSiswaDb.map((item, idx) => (
+                                                        <tr key={idx} className="border-b hover:bg-gray-50">
+                                                            <td className="p-2 font-bold text-slate-800">{item.kota}</td>
+                                                            <td className="p-2 text-gray-600">{item.produk}</td>
+                                                            <td className="p-2 font-bold text-purple-700">{item.jumsisReal} Siswa</td>
+                                                        </tr>
+                                                    ))
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -425,7 +500,7 @@
                                         <select value={selectedProdComp} onChange={(e) => setSelectedProdComp(e.target.value)} className="bg-white border border-gray-300 rounded-xl px-4 py-2 font-medium shadow-sm outline-none text-sm">
                                             {listProdukUnik.map(p => <option key={p} value={p}>{p}</option>)}
                                         </select>
-                                        <button onClick={handleExportComp} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm">📊 Export Dual-Format</button>
+                                        <button onClick={handleExportComp} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm">📊 Export Dual-Format (Lengkap)</button>
                                     </div>
                                 </div>
 
@@ -464,8 +539,8 @@
 
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-blue-50/60 p-5 rounded-2xl border border-blue-100">
                                     <div className="col-span-1">
-                                        <label className="block text-sm font-bold text-blue-900 mb-2">👥 1. Siswa & Diskon</label>
-                                        <input type="number" min="1" value={jumlahSiswa} onChange={(e) => setJumlahSiswa(parseInt(e.target.value) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none font-semibold mb-2" placeholder="Jml Siswa" />
+                                        <label className="block text-sm font-bold text-blue-900 mb-2">👥 1. Target Siswa & Diskon</label>
+                                        <input type="number" min="1" value={jumlahSiswa} onChange={(e) => setJumlahSiswa(parseInt(e.target.value) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none font-semibold mb-2" placeholder="Jml Siswa Target" />
                                         <div className="space-y-1">
                                             {diskonList.map((disc, idx) => (
                                                 <div key={idx} className="flex gap-1">
@@ -500,7 +575,6 @@
                                         </div>
                                     </div>
                                     
-                                    {/* PANEL BARU ADD-ONS */}
                                     <div className="col-span-2 bg-white/60 p-3 border border-blue-200 rounded-xl">
                                         <label className="block text-sm font-bold text-purple-900 mb-2">🧩 3. Opsi Tambahan (Add-ons Kelas)</label>
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-2 text-xs">
@@ -538,7 +612,7 @@
                                                 <th className="p-4 border-b">Kelompok Kota</th>
                                                 <th className="p-4 border-b">TA Terakhir</th>
                                                 <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA {targetTA}</th>
-                                                <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income</th>
+                                                <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income (Target)</th>
                                                 <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost Final</th>
                                                 <th className="p-4 border-b bg-purple-50 text-purple-900">Margin Bersih Akhir (%)</th>
                                             </tr>
@@ -551,7 +625,7 @@
                                                     const hargaAcuan = draftProyeksi[kel] || (getDataByTA(latestTA) ? getDataByTA(latestTA).harga : 0);
                                                     const maxTarif = getMaxTarifByKelompok(kel);
                                                     
-                                                    const fin = calculateFinancials(hargaAcuan, maxTarif.maxKBM, maxTarif.maxTO);
+                                                    const fin = calculateFinancials(hargaAcuan, maxTarif.maxKBM, maxTarif.maxTO, jumlahSiswa);
 
                                                     return (
                                                         <tr key={kel} className="border-b hover:bg-gray-50">
@@ -570,13 +644,13 @@
                                                                 />
                                                             </td>
                                                             <td className="p-4 bg-emerald-50/40 font-bold text-emerald-700">{formatRp(fin.nettIncome)}</td>
-                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700" title={`Base Cost: ${formatRp(fin.baseCost)} + Pajak 2%: ${formatRp(fin.pajakIncome)} -> + Lain 10%: ${formatRp(fin.biayaLainLain)}`}>
+                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700">
                                                                 <div className="flex flex-col">
                                                                     <span>{formatRp(fin.totalCostFinal)}</span>
                                                                     {fin.addonsCost > 0 && <span className="text-[10px] text-amber-600">Inc. Addons: {formatRp(fin.addonsCost)}</span>}
                                                                 </div>
                                                             </td>
-                                                            <td className="p-4 bg-purple-50/40 font-bold text-purple-700" title={`Profit Kotor: ${formatRp(fin.grossProfit)} - Pajak 25%: ${formatRp(fin.pajakProfit)} = Margin Bersih: ${formatRp(fin.netProfit)}`}>
+                                                            <td className="p-4 bg-purple-50/40 font-bold text-purple-700">
                                                                 <div className="flex flex-col">
                                                                     <span className={`px-3 py-1.5 rounded-lg text-sm self-start mb-1 shadow-sm ${fin.profitMargin >= 20 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                                                         {fin.profitMargin.toFixed(1)}%
