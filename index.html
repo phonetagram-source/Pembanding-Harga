@@ -36,7 +36,7 @@
         function App() {
             const [db, setDb] = useState(initialDatabase);
             const [cityDb, setCityDb] = useState(initialCityDatabase);
-            const [activeMenu, setActiveMenu] = useState("input"); // 'input' | 'kota' | 'pembanding'
+            const [activeMenu, setActiveMenu] = useState("input");
             
             const [selectedProdComp, setSelectedProdComp] = useState("TWT 12 SMA 4P");
             const [draft27, setDraft27] = useState({});
@@ -50,9 +50,18 @@
 
             const [biayaSiswaTotal, setBiayaSiswaTotal] = useState(3008475);
             const [biayaTetapKelas, setBiayaTetapKelas] = useState(5738252);
-            const [customKBM, setCustomKBM] = useState(209);
-            const [customTO, setCustomTO] = useState(20);
+            
+            // VOLUME KBM & TO: Referensi TA Sebelumnya (26/27) vs Proyeksi TA Baru (27/28)
+            const [kbmPrev, setKbmPrev] = useState(209);
+            const [toPrev, setToPrev] = useState(20);
+            const [kbmTarget, setKbmTarget] = useState(220);
+            const [toTarget, setToTarget] = useState(22);
+
             const [persenKenaikan, setPersenKenaikan] = useState(5);
+
+            // Hitung Persen Kenaikan Volume Otomatis untuk Saran
+            const persenKenaikanKBM = kbmPrev > 0 ? (((kbmTarget - kbmPrev) / kbmPrev) * 100).toFixed(1) : 0;
+            const persenKenaikanTO = toPrev > 0 ? (((toTarget - toPrev) / toPrev) * 100).toFixed(1) : 0;
 
             const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
 
@@ -161,8 +170,8 @@
                         "TA 25/26": getVal("25/26"),
                         "TA 26/27": getVal("26/27"),
                         "Proyeksi TA 27/28": draft27[kel] || 0,
-                        "Max Tarif KBM": tarif.maxKBM,
-                        "Max Tarif TO": tarif.maxTO
+                        "Target KBM": kbmTarget,
+                        "Target TO": toTarget
                     };
                 });
                 const ws = XLSX.utils.json_to_sheet(exportData);
@@ -173,7 +182,6 @@
 
             return (
                 <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
-                    {/* HEADER & NAVIGASI 3 TAB (Dibuat Lebih Luas & Responsif) */}
                     <div className="bg-slate-900 text-white p-6 flex flex-col lg:flex-row justify-between items-center gap-6">
                         <div>
                             <h1 className="text-2xl font-bold">Aplikasi Proyeksi & Kalkulator Margin Harga</h1>
@@ -297,9 +305,34 @@
                                     </div>
                                 </div>
 
+                                {/* PANEL ANALISIS VOLUME & SARAN KENAIKAN */}
+                                <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex flex-col lg:flex-row justify-between items-center gap-6">
+                                    <div>
+                                        <h3 className="text-sm font-bold text-amber-900 mb-1">📈 Analisis Volume & Saran Kenaikan (TA 26/27 vs Proyeksi 27/28)</h3>
+                                        <p className="text-xs text-amber-700">
+                                            Saran Kenaikan Volume: <span className="font-bold text-blue-700">KBM naik {persenKenaikanKBM}%</span> | <span className="font-bold text-blue-700">TO naik {persenKenaikanTO}%</span>
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-3 text-xs">
+                                        <div className="bg-white p-2 rounded-xl border border-amber-200 flex gap-2 items-center">
+                                            <span>Sesi KBM Prev:</span>
+                                            <input type="number" value={kbmPrev} onChange={(e) => setKbmPrev(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded font-semibold text-center" />
+                                            <span>Target:</span>
+                                            <input type="number" value={kbmTarget} onChange={(e) => setKbmTarget(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded font-semibold text-center bg-blue-50" />
+                                        </div>
+                                        <div className="bg-white p-2 rounded-xl border border-amber-200 flex gap-2 items-center">
+                                            <span>Sesi TO Prev:</span>
+                                            <input type="number" value={toPrev} onChange={(e) => setToPrev(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded font-semibold text-center" />
+                                            <span>Target:</span>
+                                            <input type="number" value={toTarget} onChange={(e) => setToTarget(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded font-semibold text-center bg-blue-50" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* PANEL GENERATOR HARGA */}
                                 <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div className="text-sm text-indigo-900">
-                                        <span className="font-bold">⚡ Auto-Generate Harga:</span> Naikkan seluruh harga proyeksi secara massal berdasarkan persentase.
+                                        <span className="font-bold">⚡ Auto-Generate Harga:</span> Naikkan seluruh harga proyeksi secara massal berdasarkan persentase. (Bisa disesuaikan dengan % kenaikan KBM/TO di atas).
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <input type="number" value={persenKenaikan} onChange={(e) => setPersenKenaikan(parseFloat(e.target.value) || 0)} className="w-20 bg-white px-3 py-1.5 border border-indigo-200 rounded-xl text-sm text-center font-bold" />
@@ -310,6 +343,7 @@
                                     </div>
                                 </div>
 
+                                {/* PENGATURAN KALKULATOR */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-blue-50/60 p-6 rounded-2xl border border-blue-100">
                                     <div>
                                         <label className="block text-sm font-bold text-blue-900 mb-2">👥 1. Jumlah Siswa per Kelas</label>
@@ -344,16 +378,6 @@
                                                 <span className="text-xs text-blue-800 block font-medium">Biaya Tetap Kelas (Gedung/Listrik):</span>
                                                 <input type="text" value={formatRp(biayaTetapKelas).replace('Rp', '').trim()} onChange={(e) => setBiayaTetapKelas(parseInt(e.target.value.replace(/\D/g, '')) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs" />
                                             </div>
-                                            <div className="grid grid-cols-2 gap-2 pt-1">
-                                                <div>
-                                                    <span className="text-[10px] text-blue-800 block">Sesi KBM:</span>
-                                                    <input type="number" value={customKBM} onChange={(e) => setCustomKBM(parseInt(e.target.value) || 0)} className="w-full bg-white px-2 py-1 border border-blue-200 rounded text-xs" />
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] text-blue-800 block">Sesi TO:</span>
-                                                    <input type="number" value={customTO} onChange={(e) => setCustomTO(parseInt(e.target.value) || 0)} className="w-full bg-white px-2 py-1 border border-blue-200 rounded text-xs" />
-                                                </div>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -368,7 +392,7 @@
                                                 <th className="p-4 border-b">TA 26/27</th>
                                                 <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA 27/28</th>
                                                 <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income</th>
-                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Auto Tarif Max)</th>
+                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Target KBM & TO)</th>
                                                 <th className="p-4 border-b bg-purple-50 text-purple-900">Profit Margin</th>
                                             </tr>
                                         </thead>
@@ -392,7 +416,8 @@
                                                     const nettIncome = Math.max(0, grossIncome - totalDiskon);
 
                                                     const maxTarif = getMaxTarifByKelompok(kel);
-                                                    const totalCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (customKBM * maxTarif.maxKBM) + (customTO * maxTarif.maxTO);
+                                                    // Cost KBM & TO dihitung berdasarkan TARGET Sesi yang diinput di atas
+                                                    const totalCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxTarif.maxKBM) + (toTarget * maxTarif.maxTO);
                                                     
                                                     const grossProfit = nettIncome - totalCost;
                                                     const profitMargin = nettIncome > 0 ? (grossProfit / nettIncome) * 100 : 0;
@@ -400,9 +425,9 @@
                                                     return (
                                                         <tr key={kel} className="border-b hover:bg-gray-50">
                                                             <td className="p-4 font-bold text-gray-800">Kelompok {kel}</td>
-                                                            <td className="p-4 text-xs text-gray-600">{d24 ? `${formatRp(d24.harga)} / ${d24.kbm}K` : '-'}</td>
-                                                            <td className="p-4 text-xs text-gray-600">{d25 ? `${formatRp(d25.harga)} / ${d25.kbm}K` : '-'}</td>
-                                                            <td className="p-4 text-xs text-gray-900 font-semibold">{d26 ? `${formatRp(d26.harga)} / ${d26.kbm}K` : '-'}</td>
+                                                            <td className="p-4 text-gray-600">{d24 ? formatRp(d24.harga) : '-'}</td>
+                                                            <td className="p-4 text-gray-600">{d25 ? formatRp(d25.harga) : '-'}</td>
+                                                            <td className="p-4 text-gray-900 font-semibold">{d26 ? formatRp(d26.harga) : '-'}</td>
                                                             <td className="p-4 bg-blue-50/50">
                                                                 <input 
                                                                     type="text" 
