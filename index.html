@@ -52,6 +52,15 @@
             const [biayaTetapKelas, setBiayaTetapKelas] = useState(5738252);
             const [jumlahKonsultasi, setJumlahKonsultasi] = useState(2);
 
+            // STATE UNTUK ADD-ONS BARU
+            const [addons, setAddons] = useState({
+                videoEkstra: { checked: false, count: 0 },
+                videoSoal: { checked: false, count: 0 },
+                videoTeori: { checked: false, count: 0 },
+                mengawasTOBK: false,
+                tst: false
+            });
+
             const [kbmPrev, setKbmPrev] = useState(209);
             const [toPrev, setToPrev] = useState(20);
             const [kbmTarget, setKbmTarget] = useState(220);
@@ -181,13 +190,25 @@
                 return Math.max(0, currentPrice) * jumlahSiswa;
             };
 
-            // FUNGSI KALKULASI FINANSIAL LENGKAP TERBARU
+            const getAddonsCost = (maxKBM) => {
+                let addTotal = 0;
+                if (addons.videoEkstra.checked) addTotal += (addons.videoEkstra.count * maxKBM);
+                if (addons.videoSoal.checked) addTotal += (addons.videoSoal.count * maxKBM);
+                if (addons.videoTeori.checked) addTotal += (addons.videoTeori.count * maxKBM);
+                if (addons.mengawasTOBK) addTotal += (toTarget * maxKBM);
+                if (addons.tst) addTotal += (kbmTarget * maxKBM);
+                return addTotal;
+            };
+
             const calculateFinancials = (hargaAcuan, maxKBM, maxTO) => {
                 const nettIncome = calculateNettIncomePerSiswa(hargaAcuan);
                 
+                // Hitung Addons
+                const addonsCost = getAddonsCost(maxKBM);
+
                 // 1. Base Cost Dasar
                 const biayaKonsultasi = maxKBM * 0.33 * jumlahKonsultasi;
-                const baseCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxKBM) + (toTarget * maxTO) + biayaKonsultasi;
+                const baseCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxKBM) + (toTarget * maxTO) + biayaKonsultasi + addonsCost;
 
                 // 2. Pajak Income 2% dari Nett Income
                 const pajakIncome = nettIncome * 0.02;
@@ -212,22 +233,13 @@
                 const profitMargin = nettIncome > 0 ? (netProfit / nettIncome) * 100 : 0;
 
                 return {
-                    nettIncome,
-                    pajakIncome,
-                    baseCost,
-                    biayaLainLain,
-                    totalCostFinal,
-                    grossProfit,
-                    pajakProfit,
-                    netProfit,
-                    profitMargin
+                    nettIncome, pajakIncome, addonsCost, baseCost, biayaLainLain, totalCostFinal, grossProfit, pajakProfit, netProfit, profitMargin
                 };
             };
 
             const handleExportComp = () => {
                 const wb = XLSX.utils.book_new();
 
-                // Sheet 1: Per Kelompok Kota
                 const exportKelompok = listKelompokUnik.map(kel => {
                     const getVal = (ta) => {
                         const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
@@ -235,17 +247,17 @@
                     };
                     const tarif = getMaxTarifByKelompok(kel);
                     const hargaAcuan = draftProyeksi[kel] || getVal(latestTA) || 0;
-                    
                     const fin = calculateFinancials(hargaAcuan, tarif.maxKBM, tarif.maxTO);
 
                     let rowObj = { "Kelompok Kota": `Kelompok ${kel}`, "Produk": selectedProdComp };
                     listTahunUnik.forEach(ta => { rowObj[`TA ${ta}`] = getVal(ta); });
                     rowObj[`Proyeksi ${targetTA}`] = hargaAcuan;
                     rowObj["Nett Income"] = Math.round(fin.nettIncome);
-                    rowObj["Base Cost"] = Math.round(fin.baseCost);
+                    rowObj["Add-ons Cost"] = Math.round(fin.addonsCost);
+                    rowObj["Base Cost (Inc. Addons)"] = Math.round(fin.baseCost);
                     rowObj["Pajak Income (2%)"] = Math.round(fin.pajakIncome);
                     rowObj["Biaya Lain (10%)"] = Math.round(fin.biayaLainLain);
-                    rowObj["Total Cost (Final)"] = Math.round(fin.totalCostFinal);
+                    rowObj["Total Cost Final"] = Math.round(fin.totalCostFinal);
                     rowObj["Profit Sebelum Pajak"] = Math.round(fin.grossProfit);
                     rowObj["Pajak Profit (25%)"] = Math.round(fin.pajakProfit);
                     rowObj["Margin Bersih (Rp)"] = Math.round(fin.netProfit);
@@ -255,11 +267,9 @@
                 const ws1 = XLSX.utils.json_to_sheet(exportKelompok);
                 XLSX.utils.book_append_sheet(wb, ws1, "Per Kelompok Kota");
 
-                // Sheet 2: Per Kota Detail
                 const exportDetailKota = cityDb.map(c => {
                     const foundProd = db.find(d => d.produk === selectedProdComp && d.kelompok === c.kelompok && d.tahun === latestTA);
                     const hargaAcuan = draftProyeksi[c.kelompok] || (foundProd ? foundProd.harga : 0);
-                    
                     const fin = calculateFinancials(hargaAcuan, c.tarifKBM, c.tarifTO);
 
                     return {
@@ -270,10 +280,11 @@
                         "Tarif KBM Kota": c.tarifKBM,
                         "Tarif TO Kota": c.tarifTO,
                         "Nett Income": Math.round(fin.nettIncome),
-                        "Base Cost": Math.round(fin.baseCost),
+                        "Add-ons Cost": Math.round(fin.addonsCost),
+                        "Base Cost (Inc. Addons)": Math.round(fin.baseCost),
                         "Pajak Income (2%)": Math.round(fin.pajakIncome),
                         "Biaya Lain (10%)": Math.round(fin.biayaLainLain),
-                        "Total Cost (Final)": Math.round(fin.totalCostFinal),
+                        "Total Cost Final": Math.round(fin.totalCostFinal),
                         "Profit Sebelum Pajak": Math.round(fin.grossProfit),
                         "Pajak Profit (25%)": Math.round(fin.pajakProfit),
                         "Margin Bersih (Rp)": Math.round(fin.netProfit),
@@ -286,19 +297,31 @@
                 XLSX.writeFile(wb, `Komparasi_Margin_${selectedProdComp.replace(/\s+/g, '_')}.xlsx`);
             };
 
+            const toggleAddon = (key) => {
+                if (typeof addons[key] === 'boolean') {
+                    setAddons({ ...addons, [key]: !addons[key] });
+                } else {
+                    setAddons({ ...addons, [key]: { ...addons[key], checked: !addons[key].checked } });
+                }
+            };
+
+            const updateAddonCount = (key, value) => {
+                setAddons({ ...addons, [key]: { ...addons[key], count: parseInt(value) || 0 } });
+            };
+
             return (
                 <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
                     <div className="bg-slate-900 text-white p-6 flex flex-col lg:flex-row justify-between items-center gap-6">
                         <div>
                             <h1 className="text-2xl font-bold">Aplikasi Proyeksi & Kalkulator Margin Harga</h1>
-                            <p className="text-sm text-gray-400 mt-1">Sistem manajemen database harga, honor pengajar, dan margin bersih (Pajak Profit 25%)</p>
+                            <p className="text-sm text-gray-400 mt-1">Sistem manajemen database harga, addons kelas, dan perhitungan pajak final</p>
                         </div>
                         <div className="flex flex-wrap bg-slate-800 p-2 rounded-xl border border-slate-700 gap-2">
                             <button onClick={() => setActiveMenu("input")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'input' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
                                 📂 1. Database Produk
                             </button>
                             <button onClick={() => setActiveMenu("kota")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'kota' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
-                                🏙️️ 2. Database Kota & Honor
+                                🏙 2. Database Kota & Honor
                             </button>
                             <button onClick={() => setActiveMenu("pembanding")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'pembanding' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
                                 📊 3. Kalkulator & Pembanding
@@ -312,7 +335,6 @@
                                 <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
                                         <h2 className="text-lg font-bold text-blue-900">Upload Database Harga Produk</h2>
-                                        <p className="text-sm text-blue-700 mt-1">Kelola data harga, volume KBM, dan TO per tahun ajaran.</p>
                                     </div>
                                     <div className="flex flex-wrap gap-3">
                                         <label className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md text-sm">
@@ -358,7 +380,6 @@
                                 <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
                                         <h2 className="text-lg font-bold text-emerald-900">Database Kota & Honor Pengajar</h2>
-                                        <p className="text-sm text-emerald-700 mt-1">Sistem otomatis mengambil tarif <strong>tertinggi</strong> dari setiap kelompok kota.</p>
                                     </div>
                                     <div className="flex flex-wrap gap-3">
                                         <label className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md text-sm">
@@ -394,11 +415,10 @@
                                 </div>
                             </div>
                         ) : (
-                            <div className="space-y-8">
+                            <div className="space-y-6">
                                 <div className="flex flex-col md:flex-row justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-200 gap-4">
                                     <div>
                                         <h2 className="text-lg font-bold text-slate-900">Dashboard Komparasi & Kalkulator Profit</h2>
-                                        <p className="text-sm text-slate-600">Proyeksi otomatis menggunakan TA terbaru <strong>({latestTA} $\rightarrow$ {targetTA})</strong>.</p>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <span className="text-sm font-semibold text-gray-700">Pilih Produk:</span>
@@ -409,82 +429,103 @@
                                     </div>
                                 </div>
 
-                                <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex flex-col lg:flex-row justify-between items-center gap-6">
-                                    <div>
-                                        <h3 className="text-sm font-bold text-amber-900 mb-1">📈 Analisis Volume & Saran Kenaikan (TA {latestTA} vs Proyeksi {targetTA})</h3>
-                                        <p className="text-xs text-amber-700">
-                                            Saran Kenaikan: <span className="font-bold text-blue-700">KBM naik {persenKenaikanKBM}%</span> | <span className="font-bold text-blue-700">TO naik {persenKenaikanTO}%</span>
-                                        </p>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-3 text-xs">
-                                        <div className="bg-white p-2 rounded-xl border border-amber-200 flex gap-2 items-center">
-                                            <span>Sesi KBM Prev:</span>
-                                            <input type="number" value={kbmPrev} onChange={(e) => setKbmPrev(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded font-semibold text-center" />
-                                            <span>Target:</span>
-                                            <input type="number" value={kbmTarget} onChange={(e) => setKbmTarget(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded font-semibold text-center bg-blue-50" />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl">
+                                        <h3 className="text-sm font-bold text-amber-900 mb-4">📈 Volume & Target (TA {latestTA} $\rightarrow$ {targetTA})</h3>
+                                        <div className="flex flex-wrap gap-4 text-xs">
+                                            <div className="bg-white p-3 rounded-xl border border-amber-200 flex-1">
+                                                <span className="block font-bold text-gray-600 mb-2">Sesi KBM (Naik {persenKenaikanKBM}%)</span>
+                                                <div className="flex gap-2 items-center">
+                                                    <input type="number" value={kbmPrev} onChange={(e) => setKbmPrev(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded text-center" /> $\rightarrow$
+                                                    <input type="number" value={kbmTarget} onChange={(e) => setKbmTarget(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded bg-blue-50 font-bold text-center" />
+                                                </div>
+                                            </div>
+                                            <div className="bg-white p-3 rounded-xl border border-amber-200 flex-1">
+                                                <span className="block font-bold text-gray-600 mb-2">Sesi TO (Naik {persenKenaikanTO}%)</span>
+                                                <div className="flex gap-2 items-center">
+                                                    <input type="number" value={toPrev} onChange={(e) => setToPrev(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded text-center" /> $\rightarrow$
+                                                    <input type="number" value={toTarget} onChange={(e) => setToTarget(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded bg-blue-50 font-bold text-center" />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="bg-white p-2 rounded-xl border border-amber-200 flex gap-2 items-center">
-                                            <span>Sesi TO Prev:</span>
-                                            <input type="number" value={toPrev} onChange={(e) => setToPrev(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded font-semibold text-center" />
-                                            <span>Target:</span>
-                                            <input type="number" value={toTarget} onChange={(e) => setToTarget(parseInt(e.target.value) || 0)} className="w-16 px-2 py-1 border rounded font-semibold text-center bg-blue-50" />
+                                    </div>
+
+                                    <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-2xl flex flex-col justify-center items-center gap-3">
+                                        <span className="font-bold text-indigo-900 text-sm">⚡ Auto-Generate Harga Baru</span>
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" value={persenKenaikan} onChange={(e) => setPersenKenaikan(parseFloat(e.target.value) || 0)} className="w-20 bg-white px-3 py-2 border border-indigo-200 rounded-xl text-center font-bold" />
+                                            <span className="text-sm font-bold text-indigo-900">%</span>
+                                            <button onClick={handleAutoGenerate} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl font-bold shadow-sm">
+                                                Generate Semua
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
-                                    <div className="text-sm text-indigo-900">
-                                        <span className="font-bold">⚡ Auto-Generate Harga:</span> Naikkan harga proyeksi {targetTA} berdasarkan TA terakhir ({latestTA}).
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <input type="number" value={persenKenaikan} onChange={(e) => setPersenKenaikan(parseFloat(e.target.value) || 0)} className="w-20 bg-white px-3 py-1.5 border border-indigo-200 rounded-xl text-sm text-center font-bold" />
-                                        <span className="text-sm font-bold text-indigo-900">%</span>
-                                        <button onClick={handleAutoGenerate} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm">
-                                            🚀 Generate Semua Harga
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-blue-50/60 p-6 rounded-2xl border border-blue-100">
-                                    <div>
-                                        <label className="block text-sm font-bold text-blue-900 mb-2">👥 1. Jumlah Siswa per Kelas</label>
-                                        <input type="number" min="1" value={jumlahSiswa} onChange={(e) => setJumlahSiswa(parseInt(e.target.value) || 0)} className="w-full bg-white px-4 py-2 border border-blue-200 rounded-xl outline-none font-semibold" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-bold text-blue-900 mb-2">🏷️️ 2. Diskon Beruntun (Max 3 Lapis)</label>
-                                        <div className="space-y-2">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-blue-50/60 p-5 rounded-2xl border border-blue-100">
+                                    <div className="col-span-1">
+                                        <label className="block text-sm font-bold text-blue-900 mb-2">👥 1. Siswa & Diskon</label>
+                                        <input type="number" min="1" value={jumlahSiswa} onChange={(e) => setJumlahSiswa(parseInt(e.target.value) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none font-semibold mb-2" placeholder="Jml Siswa" />
+                                        <div className="space-y-1">
                                             {diskonList.map((disc, idx) => (
-                                                <div key={idx} className="flex gap-2">
-                                                    <input type="number" placeholder={`Diskon ${idx+1}`} value={disc.value || ''} onChange={(e) => {
+                                                <div key={idx} className="flex gap-1">
+                                                    <input type="number" placeholder={`Disc ${idx+1}`} value={disc.value || ''} onChange={(e) => {
                                                         const val = parseFloat(e.target.value) || 0;
                                                         const updated = [...diskonList]; updated[idx].value = val; setDiskonList(updated);
-                                                    }} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg text-sm outline-none" />
+                                                    }} className="w-full bg-white px-2 py-1 border border-blue-200 rounded text-xs outline-none" />
                                                     <select value={disc.type} onChange={(e) => {
                                                         const updated = [...diskonList]; updated[idx].type = e.target.value; setDiskonList(updated);
-                                                    }} className="bg-white border border-blue-200 rounded-lg px-2 text-sm">
+                                                    }} className="bg-white border border-blue-200 rounded px-1 text-xs">
                                                         <option value="%">%</option><option value="Rp">Rp</option>
                                                     </select>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-bold text-blue-900 mb-2">💸 3. Rincian Cost (Biaya & Pajak)</label>
-                                        <div className="space-y-2 text-sm">
+                                    <div className="col-span-1">
+                                        <label className="block text-sm font-bold text-blue-900 mb-2">💸 2. Cost Utama</label>
+                                        <div className="space-y-2 text-xs">
                                             <div>
-                                                <span className="text-xs text-blue-800 block font-medium">Biaya per Siswa:</span>
-                                                <input type="text" value={formatRp(biayaSiswaTotal).replace('Rp', '').trim()} onChange={(e) => setBiayaSiswaTotal(parseInt(e.target.value.replace(/\D/g, '')) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs" />
+                                                <span className="text-blue-800 font-medium">Biaya Siswa:</span>
+                                                <input type="text" value={formatRp(biayaSiswaTotal).replace('Rp', '').trim()} onChange={(e) => setBiayaSiswaTotal(parseInt(e.target.value.replace(/\D/g, '')) || 0)} className="w-full bg-white px-2 py-1 border border-blue-200 rounded outline-none" />
                                             </div>
                                             <div>
-                                                <span className="text-xs text-blue-800 block font-medium">Biaya Tetap Kelas (Gedung/Listrik):</span>
-                                                <input type="text" value={formatRp(biayaTetapKelas).replace('Rp', '').trim()} onChange={(e) => setBiayaTetapKelas(parseInt(e.target.value.replace(/\D/g, '')) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs" />
+                                                <span className="text-blue-800 font-medium">Biaya Tetap:</span>
+                                                <input type="text" value={formatRp(biayaTetapKelas).replace('Rp', '').trim()} onChange={(e) => setBiayaTetapKelas(parseInt(e.target.value.replace(/\D/g, '')) || 0)} className="w-full bg-white px-2 py-1 border border-blue-200 rounded outline-none" />
                                             </div>
                                             <div>
-                                                <span className="text-xs text-blue-800 block font-medium">Jumlah Konsultasi (33% dari Tarif Pengajar):</span>
-                                                <input type="number" min="0" value={jumlahKonsultasi} onChange={(e) => setJumlahKonsultasi(parseInt(e.target.value) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs font-semibold" />
+                                                <span className="text-blue-800 font-medium">Jumlah Konsul:</span>
+                                                <input type="number" min="0" value={jumlahKonsultasi} onChange={(e) => setJumlahKonsultasi(parseInt(e.target.value) || 0)} className="w-full bg-white px-2 py-1 border border-blue-200 rounded outline-none font-bold" />
                                             </div>
-                                            <div className="pt-1 text-[11px] text-blue-900 font-semibold bg-blue-100/50 p-2 rounded-lg leading-tight">
-                                                Telah memperhitungkan Pajak Income (2%), Biaya Lain (10%), serta pemotongan Pajak Profit (25%) pada hasil Margin Bersih.
+                                        </div>
+                                    </div>
+                                    
+                                    {/* PANEL BARU ADD-ONS */}
+                                    <div className="col-span-2 bg-white/60 p-3 border border-blue-200 rounded-xl">
+                                        <label className="block text-sm font-bold text-purple-900 mb-2">🧩 3. Opsi Tambahan (Add-ons Kelas)</label>
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                                            <div className="flex items-center gap-2">
+                                                <input type="checkbox" checked={addons.videoEkstra.checked} onChange={() => toggleAddon('videoEkstra')} />
+                                                <span className="w-20 font-medium text-gray-700">Video Ekstra</span>
+                                                <input type="number" disabled={!addons.videoEkstra.checked} value={addons.videoEkstra.count} onChange={(e) => updateAddonCount('videoEkstra', e.target.value)} className={`w-12 border rounded px-1 text-center ${addons.videoEkstra.checked ? 'bg-white' : 'bg-gray-100'}`} />
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input type="checkbox" checked={addons.videoSoal.checked} onChange={() => toggleAddon('videoSoal')} />
+                                                <span className="w-20 font-medium text-gray-700">Video Soal</span>
+                                                <input type="number" disabled={!addons.videoSoal.checked} value={addons.videoSoal.count} onChange={(e) => updateAddonCount('videoSoal', e.target.value)} className={`w-12 border rounded px-1 text-center ${addons.videoSoal.checked ? 'bg-white' : 'bg-gray-100'}`} />
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input type="checkbox" checked={addons.videoTeori.checked} onChange={() => toggleAddon('videoTeori')} />
+                                                <span className="w-20 font-medium text-gray-700">Video Teori</span>
+                                                <input type="number" disabled={!addons.videoTeori.checked} value={addons.videoTeori.count} onChange={(e) => updateAddonCount('videoTeori', e.target.value)} className={`w-12 border rounded px-1 text-center ${addons.videoTeori.checked ? 'bg-white' : 'bg-gray-100'}`} />
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input type="checkbox" checked={addons.mengawasTOBK} onChange={() => toggleAddon('mengawasTOBK')} />
+                                                <span className="font-medium text-gray-700">Mengawas TOBK <span className="text-[10px] text-gray-400">(=Sesi TO)</span></span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input type="checkbox" checked={addons.tst} onChange={() => toggleAddon('tst')} />
+                                                <span className="font-medium text-gray-700">TST <span className="text-[10px] text-gray-400">(=Sesi KBM)</span></span>
                                             </div>
                                         </div>
                                     </div>
@@ -495,9 +536,7 @@
                                         <thead className="bg-gray-100 text-gray-700">
                                             <tr>
                                                 <th className="p-4 border-b">Kelompok Kota</th>
-                                                {listTahunUnik.map(ta => (
-                                                    <th key={ta} className="p-4 border-b">TA {ta}</th>
-                                                ))}
+                                                <th className="p-4 border-b">TA Terakhir</th>
                                                 <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA {targetTA}</th>
                                                 <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income</th>
                                                 <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost Final</th>
@@ -505,7 +544,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {listKelompokUnik.length === 0 ? <tr><td colSpan={listTahunUnik.length + 5} className="p-6 text-center text-gray-400">Tidak ada data untuk produk ini.</td></tr> :
+                                            {listKelompokUnik.length === 0 ? <tr><td colSpan="6" className="p-6 text-center text-gray-400">Tidak ada data untuk produk ini.</td></tr> :
                                                 listKelompokUnik.map((kel) => {
                                                     const getDataByTA = (ta) => db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
                                                     
@@ -517,10 +556,7 @@
                                                     return (
                                                         <tr key={kel} className="border-b hover:bg-gray-50">
                                                             <td className="p-4 font-bold text-gray-800">Kelompok {kel}</td>
-                                                            {listTahunUnik.map(ta => {
-                                                                const d = getDataByTA(ta);
-                                                                return <td key={ta} className="p-4 text-gray-600 text-xs">{d ? formatRp(d.harga) : '-'}</td>;
-                                                            })}
+                                                            <td className="p-4 text-gray-600 font-medium">{getDataByTA(latestTA) ? formatRp(getDataByTA(latestTA).harga) : '-'}</td>
                                                             <td className="p-4 bg-blue-50/50">
                                                                 <input 
                                                                     type="text" 
@@ -530,19 +566,22 @@
                                                                         const val = parseInt(e.target.value.replace(/\D/g, ''), 10) || 0;
                                                                         setDraftProyeksi({...draftProyeksi, [kel]: val});
                                                                     }}
-                                                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none text-sm"
+                                                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none font-bold text-blue-900"
                                                                 />
                                                             </td>
-                                                            <td className="p-4 bg-emerald-50/40 font-bold text-emerald-700 text-xs">{formatRp(fin.nettIncome)}</td>
-                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Pajak 2% + Biaya 10% dihitung`}>
-                                                                {formatRp(fin.totalCostFinal)}
+                                                            <td className="p-4 bg-emerald-50/40 font-bold text-emerald-700">{formatRp(fin.nettIncome)}</td>
+                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700" title={`Base Cost: ${formatRp(fin.baseCost)} + Pajak 2%: ${formatRp(fin.pajakIncome)} -> + Lain 10%: ${formatRp(fin.biayaLainLain)}`}>
+                                                                <div className="flex flex-col">
+                                                                    <span>{formatRp(fin.totalCostFinal)}</span>
+                                                                    {fin.addonsCost > 0 && <span className="text-[10px] text-amber-600">Inc. Addons: {formatRp(fin.addonsCost)}</span>}
+                                                                </div>
                                                             </td>
                                                             <td className="p-4 bg-purple-50/40 font-bold text-purple-700" title={`Profit Kotor: ${formatRp(fin.grossProfit)} - Pajak 25%: ${formatRp(fin.pajakProfit)} = Margin Bersih: ${formatRp(fin.netProfit)}`}>
                                                                 <div className="flex flex-col">
-                                                                    <span className={`px-2 py-1 rounded-lg text-xs self-start mb-1 ${fin.profitMargin >= 20 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                                    <span className={`px-3 py-1.5 rounded-lg text-sm self-start mb-1 shadow-sm ${fin.profitMargin >= 20 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                                                         {fin.profitMargin.toFixed(1)}%
                                                                     </span>
-                                                                    <span className="text-[10px] text-purple-900">Bersih: {formatRp(fin.netProfit)}</span>
+                                                                    <span className="text-[10px] text-purple-900 bg-white/60 px-1 rounded">Net: {formatRp(fin.netProfit)}</span>
                                                                 </div>
                                                             </td>
                                                         </tr>
