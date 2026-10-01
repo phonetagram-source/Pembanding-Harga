@@ -50,8 +50,6 @@
 
             const [biayaSiswaTotal, setBiayaSiswaTotal] = useState(3008475);
             const [biayaTetapKelas, setBiayaTetapKelas] = useState(5738252);
-            
-            // Sesi Konsultasi
             const [jumlahKonsultasi, setJumlahKonsultasi] = useState(2);
 
             const [kbmPrev, setKbmPrev] = useState(209);
@@ -169,6 +167,21 @@
                 return { maxKBM, maxTO };
             };
 
+            // FUNGSI HITUNG NETT INCOME BERDASARKAN DISKON BERUNTUN (PROGRESIF)
+            const calculateNettIncomePerSiswa = (baseHarga) => {
+                let currentPrice = baseHarga;
+                diskonList.forEach(disc => {
+                    if (disc.value > 0) {
+                        if (disc.type === '%') {
+                            currentPrice = currentPrice * (1 - disc.value / 100);
+                        } else {
+                            currentPrice = currentPrice - disc.value;
+                        }
+                    }
+                });
+                return Math.max(0, currentPrice) * jumlahSiswa;
+            };
+
             const handleExportComp = () => {
                 const wb = XLSX.utils.book_new();
 
@@ -180,18 +193,18 @@
                     };
                     const tarif = getMaxTarifByKelompok(kel);
                     const hargaAcuan = draftProyeksi[kel] || getVal(latestTA) || 0;
-                    const gross = hargaAcuan * jumlahSiswa;
+                    const nett = calculateNettIncomePerSiswa(hargaAcuan);
                     
-                    // Rumus Konsultasi = Tarif Pengajar * 33% * Jumlah Konsultasi
                     const biayaKonsultasi = tarif.maxKBM * 0.33 * jumlahKonsultasi;
                     const cost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * tarif.maxKBM) + (toTarget * tarif.maxTO) + biayaKonsultasi;
                     
-                    const marginRp = gross - cost;
-                    const marginPct = gross > 0 ? (marginRp / gross) * 100 : 0;
+                    const marginRp = nett - cost;
+                    const marginPct = nett > 0 ? (marginRp / nett) * 100 : 0;
 
                     let rowObj = { "Kelompok Kota": `Kelompok ${kel}`, "Produk": selectedProdComp };
                     listTahunUnik.forEach(ta => { rowObj[`TA ${ta}`] = getVal(ta); });
                     rowObj[`Proyeksi ${targetTA}`] = hargaAcuan;
+                    rowObj["Nett Income"] = Math.round(nett);
                     rowObj["Total Cost"] = Math.round(cost);
                     rowObj["Margin (Rp)"] = Math.round(marginRp);
                     rowObj["Margin (%)"] = parseFloat(marginPct.toFixed(2));
@@ -204,14 +217,13 @@
                 const exportDetailKota = cityDb.map(c => {
                     const foundProd = db.find(d => d.produk === selectedProdComp && d.kelompok === c.kelompok && d.tahun === latestTA);
                     const hargaAcuan = draftProyeksi[c.kelompok] || (foundProd ? foundProd.harga : 0);
-                    const gross = hargaAcuan * jumlahSiswa;
+                    const nett = calculateNettIncomePerSiswa(hargaAcuan);
                     
-                    // Biaya konsul individu kota = c.tarifKBM * 0.33 * jumlahKonsultasi
                     const biayaKonsultasiKota = c.tarifKBM * 0.33 * jumlahKonsultasi;
                     const cost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * c.tarifKBM) + (toTarget * c.tarifTO) + biayaKonsultasiKota;
                     
-                    const marginRp = gross - cost;
-                    const marginPct = gross > 0 ? (marginRp / gross) * 100 : 0;
+                    const marginRp = nett - cost;
+                    const marginPct = nett > 0 ? (marginRp / nett) * 100 : 0;
 
                     return {
                         "Nama Kota": c.kota,
@@ -220,6 +232,7 @@
                         "Harga Acuan": hargaAcuan,
                         "Tarif KBM Kota": c.tarifKBM,
                         "Tarif TO Kota": c.tarifTO,
+                        "Nett Income": Math.round(nett),
                         "Total Cost": Math.round(cost),
                         "Margin (Rp)": Math.round(marginRp),
                         "Margin (%)": parseFloat(marginPct.toFixed(2))
@@ -396,7 +409,7 @@
                                         <input type="number" min="1" value={jumlahSiswa} onChange={(e) => setJumlahSiswa(parseInt(e.target.value) || 0)} className="w-full bg-white px-4 py-2 border border-blue-200 rounded-xl outline-none font-semibold" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-blue-900 mb-2">🏷️ 2. Diskon (Max 3 Lapis)</label>
+                                        <label className="block text-sm font-bold text-blue-900 mb-2">🏷️ 2. Diskon Beruntun (Max 3 Lapis)</label>
                                         <div className="space-y-2">
                                             {diskonList.map((disc, idx) => (
                                                 <div key={idx} className="flex gap-2">
@@ -441,8 +454,8 @@
                                                     <th key={ta} className="p-4 border-b">TA {ta}</th>
                                                 ))}
                                                 <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA {targetTA}</th>
-                                                <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income</th>
-                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Konsul 33% Pengajar)</th>
+                                                <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income (Diskon Beruntun)</th>
+                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost</th>
                                                 <th className="p-4 border-b bg-purple-50 text-purple-900">Profit Margin</th>
                                             </tr>
                                         </thead>
@@ -452,17 +465,9 @@
                                                     const getDataByTA = (ta) => db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
                                                     
                                                     const hargaAcuan = draftProyeksi[kel] || (getDataByTA(latestTA) ? getDataByTA(latestTA).harga : 0);
-                                                    const grossIncome = hargaAcuan * jumlahSiswa;
-
-                                                    let totalDiskon = 0;
-                                                    diskonList.forEach(disc => {
-                                                        if (disc.type === '%') totalDiskon += grossIncome * (disc.value / 100);
-                                                        else totalDiskon += disc.value * jumlahSiswa;
-                                                    });
-                                                    const nettIncome = Math.max(0, grossIncome - totalDiskon);
+                                                    const nettIncome = calculateNettIncomePerSiswa(hargaAcuan);
 
                                                     const maxTarif = getMaxTarifByKelompok(kel);
-                                                    // Total Cost = (Biaya Siswa * Siswa) + Tetap + (KBM * Tarif) + (TO * Tarif) + (Jumlah Konsul * 33% Tarif Pengajar)
                                                     const biayaKonsultasi = maxTarif.maxKBM * 0.33 * jumlahKonsultasi;
                                                     const totalCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxTarif.maxKBM) + (toTarget * maxTarif.maxTO) + biayaKonsultasi;
                                                     
@@ -489,7 +494,7 @@
                                                                 />
                                                             </td>
                                                             <td className="p-4 bg-emerald-50/40 font-bold text-emerald-700 text-xs">{formatRp(nettIncome)}</td>
-                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Konsul = ${jumlahKonsultasi} sesi * 33% dari ${formatRp(maxTarif.maxKBM)}`}>
+                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Konsul = 33% dari ${formatRp(maxTarif.maxKBM)} * ${jumlahKonsultasi}`}>
                                                                 {formatRp(totalCost)}
                                                             </td>
                                                             <td className="p-4 bg-purple-50/40 font-bold text-purple-700">
