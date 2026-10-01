@@ -51,7 +51,7 @@
             const [biayaSiswaTotal, setBiayaSiswaTotal] = useState(3008475);
             const [biayaTetapKelas, setBiayaTetapKelas] = useState(5738252);
             
-            // Sesi Konsultasi (Biaya konsul = Jumlah Konsultasi * 33% dari Tarif Pengajar)
+            // Sesi Konsultasi
             const [jumlahKonsultasi, setJumlahKonsultasi] = useState(2);
 
             const [kbmPrev, setKbmPrev] = useState(209);
@@ -66,22 +66,9 @@
 
             const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
 
-            // Deteksi Tahun Ajaran (TA) terakhir yang ada di database untuk produk terpilih, lalu tentukan TA Proyeksi (TA + 1)
             const listTahunUnik = [...new Set(db.map(d => d.tahun))].sort();
             const latestTA = listTahunUnik.length > 0 ? listTahunUnik[listTahunUnik.length - 1] : "26/27";
             
-            // Fungsi penambahan 1 tahun ajaran (misal "26/27" -> "27/28")
-            const getNextTA = (taStr) => {
-                const parts = taStr.split('/');
-                if (parts.length === 2) {
-                    const y1 = parseInt(parts[0], 10);
-                    const y2 = parseInt(parts[1], 10);
-                    return `${String(y1 + 1).padStart(2, '0')}/${String(y2 + 1).padStart(2, '0')}`;
-                }
-                return "27/28";
-            };
-            const targetTA = getPrevOrNextTA(latestTA, 'next');
-
             function getPrevOrNextTA(ta, direction) {
                 const parts = ta.split('/');
                 if (parts.length === 2) {
@@ -93,7 +80,7 @@
                 }
                 return ta;
             }
-            const prevTA = getPrevOrNextTA(latestTA, 'prev');
+            const targetTA = getPrevOrNextTA(latestTA, 'next');
 
             const cleanYear = (rawYear) => {
                 const str = String(rawYear).trim();
@@ -182,7 +169,6 @@
                 return { maxKBM, maxTO };
             };
 
-            // DUAL-FORMAT EXPORT (1. Per Kelompok Kota, 2. Per Kota Detail)
             const handleExportComp = () => {
                 const wb = XLSX.utils.book_new();
 
@@ -195,15 +181,19 @@
                     const tarif = getMaxTarifByKelompok(kel);
                     const hargaAcuan = draftProyeksi[kel] || getVal(latestTA) || 0;
                     const gross = hargaAcuan * jumlahSiswa;
-                    const cost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * tarif.maxKBM) + (toTarget * tarif.maxTO) + (jumlahKonsultasi * (tarif.maxKBM * 0.33));
+                    
+                    // Rumus Konsultasi = Tarif Pengajar * 33% * Jumlah Konsultasi
+                    const biayaKonsultasi = tarif.maxKBM * 0.33 * jumlahKonsultasi;
+                    const cost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * tarif.maxKBM) + (toTarget * tarif.maxTO) + biayaKonsultasi;
+                    
                     const marginRp = gross - cost;
                     const marginPct = gross > 0 ? (marginRp / gross) * 100 : 0;
 
                     let rowObj = { "Kelompok Kota": `Kelompok ${kel}`, "Produk": selectedProdComp };
                     listTahunUnik.forEach(ta => { rowObj[`TA ${ta}`] = getVal(ta); });
                     rowObj[`Proyeksi ${targetTA}`] = hargaAcuan;
-                    rowObj["Total Cost"] = cost;
-                    rowObj["Margin (Rp)"] = marginRp;
+                    rowObj["Total Cost"] = Math.round(cost);
+                    rowObj["Margin (Rp)"] = Math.round(marginRp);
                     rowObj["Margin (%)"] = parseFloat(marginPct.toFixed(2));
                     return rowObj;
                 });
@@ -215,8 +205,11 @@
                     const foundProd = db.find(d => d.produk === selectedProdComp && d.kelompok === c.kelompok && d.tahun === latestTA);
                     const hargaAcuan = draftProyeksi[c.kelompok] || (foundProd ? foundProd.harga : 0);
                     const gross = hargaAcuan * jumlahSiswa;
-                    // Biaya konsul individu kota = jumlahKonsultasi * (c.tarifKBM * 0.33)
-                    const cost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * c.tarifKBM) + (toTarget * c.tarifTO) + (jumlahKonsultasi * (c.tarifKBM * 0.33));
+                    
+                    // Biaya konsul individu kota = c.tarifKBM * 0.33 * jumlahKonsultasi
+                    const biayaKonsultasiKota = c.tarifKBM * 0.33 * jumlahKonsultasi;
+                    const cost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * c.tarifKBM) + (toTarget * c.tarifTO) + biayaKonsultasiKota;
+                    
                     const marginRp = gross - cost;
                     const marginPct = gross > 0 ? (marginRp / gross) * 100 : 0;
 
@@ -227,8 +220,8 @@
                         "Harga Acuan": hargaAcuan,
                         "Tarif KBM Kota": c.tarifKBM,
                         "Tarif TO Kota": c.tarifTO,
-                        "Total Cost": cost,
-                        "Margin (Rp)": marginRp,
+                        "Total Cost": Math.round(cost),
+                        "Margin (Rp)": Math.round(marginRp),
                         "Margin (%)": parseFloat(marginPct.toFixed(2))
                     };
                 });
@@ -432,7 +425,7 @@
                                                 <input type="text" value={formatRp(biayaTetapKelas).replace('Rp', '').trim()} onChange={(e) => setBiayaTetapKelas(parseInt(e.target.value.replace(/\D/g, '')) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs" />
                                             </div>
                                             <div>
-                                                <span className="text-xs text-blue-800 block font-medium">Jumlah Konsultasi (33% dari Tarif KBM):</span>
+                                                <span className="text-xs text-blue-800 block font-medium">Jumlah Konsultasi (33% dari Tarif Pengajar):</span>
                                                 <input type="number" min="0" value={jumlahKonsultasi} onChange={(e) => setJumlahKonsultasi(parseInt(e.target.value) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs font-semibold" />
                                             </div>
                                         </div>
@@ -449,7 +442,7 @@
                                                 ))}
                                                 <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA {targetTA}</th>
                                                 <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income</th>
-                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Auto Konsul 33%)</th>
+                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Konsul 33% Pengajar)</th>
                                                 <th className="p-4 border-b bg-purple-50 text-purple-900">Profit Margin</th>
                                             </tr>
                                         </thead>
@@ -469,9 +462,9 @@
                                                     const nettIncome = Math.max(0, grossIncome - totalDiskon);
 
                                                     const maxTarif = getMaxTarifByKelompok(kel);
-                                                    // Total Cost = Biaya Siswa + Biaya Tetap + (KBM * Tarif) + (TO * Tarif) + (Konsultasi * 33% Tarif KBM)
-                                                    const biayaKonsultasiTotal = jumlahKonsultasi * (maxTarif.maxKBM * 0.33);
-                                                    const totalCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxTarif.maxKBM) + (toTarget * maxTarif.maxTO) + biayaKonsultasiTotal;
+                                                    // Total Cost = (Biaya Siswa * Siswa) + Tetap + (KBM * Tarif) + (TO * Tarif) + (Jumlah Konsul * 33% Tarif Pengajar)
+                                                    const biayaKonsultasi = maxTarif.maxKBM * 0.33 * jumlahKonsultasi;
+                                                    const totalCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxTarif.maxKBM) + (toTarget * maxTarif.maxTO) + biayaKonsultasi;
                                                     
                                                     const grossProfit = nettIncome - totalCost;
                                                     const profitMargin = nettIncome > 0 ? (grossProfit / nettIncome) * 100 : 0;
@@ -496,7 +489,7 @@
                                                                 />
                                                             </td>
                                                             <td className="p-4 bg-emerald-50/40 font-bold text-emerald-700 text-xs">{formatRp(nettIncome)}</td>
-                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Konsul 33% dari max KBM (${formatRp(maxTarif.maxKBM)})`}>
+                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Konsul = ${jumlahKonsultasi} sesi * 33% dari ${formatRp(maxTarif.maxKBM)}`}>
                                                                 {formatRp(totalCost)}
                                                             </td>
                                                             <td className="p-4 bg-purple-50/40 font-bold text-purple-700">
