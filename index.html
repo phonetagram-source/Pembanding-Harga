@@ -25,7 +25,6 @@
             { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 2, harga: 12900000, kbm: 209, to: 20 },
         ];
 
-        // Default database kota & honor pengajar
         const initialCityDatabase = [
             { kota: "Jakarta", kelompok: 1, tarifKBM: 186713, tarifTO: 40000 },
             { kota: "Bandung", kelompok: 1, tarifKBM: 175000, tarifTO: 40000 },
@@ -42,7 +41,6 @@
             const [selectedProdComp, setSelectedProdComp] = useState("TWT 12 SMA 4P");
             const [draft27, setDraft27] = useState({});
 
-            // State Kalkulator Finansial
             const [jumlahSiswa, setJumlahSiswa] = useState(15);
             const [diskonList, setDiskonList] = useState([
                 { type: '%', value: 0 },
@@ -58,11 +56,8 @@
 
             const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
 
-            // --- DOWNLOAD TEMPLATES ---
             const handleDownloadTemplateProduk = () => {
-                const templateData = [
-                    { Tahun_Ajaran: "26/27", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 13700000, Jumlah_KBM: 209, Jumlah_TO: 20 }
-                ];
+                const templateData = [{ Tahun_Ajaran: "26/27", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 13700000, Jumlah_KBM: 209, Jumlah_TO: 20 }];
                 const ws = XLSX.utils.json_to_sheet(templateData);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "TemplateProduk");
@@ -70,16 +65,13 @@
             };
 
             const handleDownloadTemplateKota = () => {
-                const templateData = [
-                    { Nama_Kota: "Jakarta", Kelompok_Kota: 1, Tarif_KBM: 186713, Tarif_TO: 40000 }
-                ];
+                const templateData = [{ Nama_Kota: "Jakarta", Kelompok_Kota: 1, Tarif_KBM: 186713, Tarif_TO: 40000 }];
                 const ws = XLSX.utils.json_to_sheet(templateData);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "TemplateKota");
                 XLSX.writeFile(wb, "template_database_kota_pengajar.xlsx");
             };
 
-            // --- UPLOAD HANDLERS ---
             const handleUploadProduk = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -90,7 +82,6 @@
                         const workbook = XLSX.read(dataBuffer, { type: 'array' });
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-
                         if (jsonData.length === 0) { alert("File kosong!"); return; }
 
                         const formattedData = jsonData.map(row => ({
@@ -102,7 +93,6 @@
                             kbm: parseInt(row.Jumlah_KBM || row.kbm || 209),
                             to: parseInt(row.Jumlah_TO || row.to || 20)
                         }));
-
                         setDb(formattedData);
                         alert(`Berhasil memuat ${formattedData.length} baris data produk.`);
                     } catch (error) { alert("Gagal membaca file Excel."); }
@@ -120,7 +110,6 @@
                         const workbook = XLSX.read(dataBuffer, { type: 'array' });
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-
                         if (jsonData.length === 0) { alert("File kosong!"); return; }
 
                         const formattedCityData = jsonData.map(row => ({
@@ -129,7 +118,6 @@
                             tarifKBM: parseInt(String(row.Tarif_KBM || row.tarifKBM || 0).replace(/\D/g, '')) || 0,
                             tarifTO: parseInt(String(row.Tarif_TO || row.tarifTO || 0).replace(/\D/g, '')) || 0
                         }));
-
                         setCityDb(formattedCityData);
                         alert(`Berhasil memuat ${formattedCityData.length} data kota & honor pengajar.`);
                     } catch (error) { alert("Gagal membaca file Excel kota."); }
@@ -151,11 +139,9 @@
             const listProdukUnik = [...new Set(db.map(item => item.produk))];
             const listKelompokUnik = [...new Set(db.filter(d => d.produk === selectedProdComp).map(d => d.kelompok))].sort((a, b) => a - b);
 
-            // FUNGSI MENCARI TARIF TERTINGGI PER KELOMPOK KOTA
             const getMaxTarifByKelompok = (kelompokId) => {
                 const citiesInGroup = cityDb.filter(c => c.kelompok === kelompokId);
-                if (citiesInGroup.length === 0) return { maxKBM: 186713, maxTO: 40000 }; // Fallback default
-                
+                if (citiesInGroup.length === 0) return { maxKBM: 186713, maxTO: 40000 };
                 const maxKBM = Math.max(...citiesInGroup.map(c => c.tarifKBM));
                 const maxTO = Math.max(...citiesInGroup.map(c => c.tarifTO));
                 return { maxKBM, maxTO };
@@ -187,20 +173,20 @@
 
             return (
                 <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
-                    {/* HEADER & NAVIGASI 3 TAB */}
-                    <div className="bg-slate-900 text-white p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                    {/* HEADER & NAVIGASI 3 TAB (Dibuat Lebih Luas & Responsif) */}
+                    <div className="bg-slate-900 text-white p-6 flex flex-col lg:flex-row justify-between items-center gap-6">
                         <div>
                             <h1 className="text-2xl font-bold">Aplikasi Proyeksi & Kalkulator Margin Harga</h1>
                             <p className="text-sm text-gray-400 mt-1">Sistem manajemen database harga, honor pengajar, dan simulasi profitabilitas</p>
                         </div>
-                        <div className="flex flex-wrap bg-slate-800 p-1.5 rounded-xl border border-slate-700 gap-1">
-                            <button onClick={() => setActiveMenu("input")} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${activeMenu === 'input' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}>
+                        <div className="flex flex-wrap bg-slate-800 p-2 rounded-xl border border-slate-700 gap-2">
+                            <button onClick={() => setActiveMenu("input")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'input' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
                                 📂 1. Database Produk
                             </button>
-                            <button onClick={() => setActiveMenu("kota")} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${activeMenu === 'kota' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}>
+                            <button onClick={() => setActiveMenu("kota")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'kota' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
                                 🏙️ 2. Database Kota & Honor
                             </button>
-                            <button onClick={() => setActiveMenu("pembanding")} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${activeMenu === 'pembanding' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}>
+                            <button onClick={() => setActiveMenu("pembanding")} className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${activeMenu === 'pembanding' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-300 hover:text-white'}`}>
                                 📊 3. Kalkulator & Pembanding
                             </button>
                         </div>
@@ -208,7 +194,6 @@
 
                     <div className="p-8">
                         {activeMenu === 'input' ? (
-                            /* TAB 1: KELOLA DATABASE PRODUK */
                             <div className="space-y-6">
                                 <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
@@ -256,7 +241,6 @@
                                 </div>
                             </div>
                         ) : activeMenu === 'kota' ? (
-                            /* TAB 2: DATABASE KOTA & HONOR PENGAJAR */
                             <div className="space-y-6">
                                 <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
@@ -298,7 +282,6 @@
                                 </div>
                             </div>
                         ) : (
-                            /* TAB 3: PEMBANDING & KALKULATOR PROFIT */
                             <div className="space-y-8">
                                 <div className="flex flex-col md:flex-row justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-200 gap-4">
                                     <div>
@@ -314,7 +297,6 @@
                                     </div>
                                 </div>
 
-                                {/* PANEL GENERATOR */}
                                 <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div className="text-sm text-indigo-900">
                                         <span className="font-bold">⚡ Auto-Generate Harga:</span> Naikkan seluruh harga proyeksi secara massal berdasarkan persentase.
@@ -328,7 +310,6 @@
                                     </div>
                                 </div>
 
-                                {/* PENGATURAN KALKULATOR */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-blue-50/60 p-6 rounded-2xl border border-blue-100">
                                     <div>
                                         <label className="block text-sm font-bold text-blue-900 mb-2">👥 1. Jumlah Siswa per Kelas</label>
@@ -377,7 +358,6 @@
                                     </div>
                                 </div>
 
-                                {/* TABEL UTAMA */}
                                 <div className="overflow-x-auto border border-gray-200 rounded-2xl shadow-sm">
                                     <table className="w-full text-left border-collapse text-sm">
                                         <thead className="bg-gray-100 text-gray-700">
@@ -411,7 +391,6 @@
                                                     });
                                                     const nettIncome = Math.max(0, grossIncome - totalDiskon);
 
-                                                    // AMBIL TARIF TERTINGGI OTOMATIS BERDASARKAN DATABASE KOTA TAB 2
                                                     const maxTarif = getMaxTarifByKelompok(kel);
                                                     const totalCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (customKBM * maxTarif.maxKBM) + (customTO * maxTarif.maxTO);
                                                     
