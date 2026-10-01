@@ -17,52 +17,72 @@
         const { useState } = React;
 
         const initialDatabase = [
-            { tahun: "24/25", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 1, harga: 11400000 },
-            { tahun: "25/26", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 1, harga: 13000000 },
-            { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 1, harga: 13700000 },
-            { tahun: "24/25", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 2, harga: 10500000 },
-            { tahun: "25/26", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 2, harga: 12100000 },
-            { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 2, harga: 12900000 },
+            { tahun: "24/25", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 1, harga: 11400000, kbm: 180, to: 15 },
+            { tahun: "25/26", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 1, harga: 13000000, kbm: 195, to: 18 },
+            { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 1, harga: 13700000, kbm: 209, to: 20 },
+            { tahun: "24/25", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 2, harga: 10500000, kbm: 180, to: 15 },
+            { tahun: "25/26", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 2, harga: 12100000, kbm: 195, to: 18 },
+            { tahun: "26/27", tingkat: "12 SMA", produk: "TWT 12 SMA 4P", kelompok: 2, harga: 12900000, kbm: 209, to: 20 },
+        ];
+
+        // Default database kota & honor pengajar
+        const initialCityDatabase = [
+            { kota: "Jakarta", kelompok: 1, tarifKBM: 186713, tarifTO: 40000 },
+            { kota: "Bandung", kelompok: 1, tarifKBM: 175000, tarifTO: 40000 },
+            { kota: "Bekasi", kelompok: 2, tarifKBM: 160000, tarifTO: 35000 },
+            { kota: "Bogor", kelompok: 2, tarifKBM: 155000, tarifTO: 35000 },
+            { kota: "Semarang", kelompok: 3, tarifKBM: 140000, tarifTO: 30000 },
         ];
 
         function App() {
             const [db, setDb] = useState(initialDatabase);
-            const [activeMenu, setActiveMenu] = useState("input");
+            const [cityDb, setCityDb] = useState(initialCityDatabase);
+            const [activeMenu, setActiveMenu] = useState("input"); // 'input' | 'kota' | 'pembanding'
+            
             const [selectedProdComp, setSelectedProdComp] = useState("TWT 12 SMA 4P");
             const [draft27, setDraft27] = useState({});
 
-            // State Kalkulator Keuangan (Tab Pembanding)
-            const [jumlahSiswa, setjumlahSiswa] = useState(15);
-            
-            // State Diskon (Maksimal 3 diskon: { type: '%'/ 'Rp', value: number })
+            // State Kalkulator Finansial
+            const [jumlahSiswa, setJumlahSiswa] = useState(15);
             const [diskonList, setDiskonList] = useState([
                 { type: '%', value: 0 },
                 { type: '%', value: 0 },
                 { type: '%', value: 0 }
             ]);
 
-            // State Cost (Biaya per siswa & Biaya per kelas)
-            const [biayaPerSiswa, setBiayaPerSiswa] = useState(200000); // e.g. modul, snack
-            const [biayaPerKelas, setBiayaPerKelas] = useState(3000000); // e.g. sewa, insentif guru
+            const [biayaSiswaTotal, setBiayaSiswaTotal] = useState(3008475);
+            const [biayaTetapKelas, setBiayaTetapKelas] = useState(5738252);
+            const [customKBM, setCustomKBM] = useState(209);
+            const [customTO, setCustomTO] = useState(20);
+            const [persenKenaikan, setPersenKenaikan] = useState(5);
 
             const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka);
 
-            const handleDownloadTemplate = () => {
+            // --- DOWNLOAD TEMPLATES ---
+            const handleDownloadTemplateProduk = () => {
                 const templateData = [
-                    { Tahun_Ajaran: "24/25", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 11400000 },
-                    { Tahun_Ajaran: "25/26", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 13000000 },
-                    { Tahun_Ajaran: "26/27", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 13700000 }
+                    { Tahun_Ajaran: "26/27", Tingkat_Kelas: "12 SMA", Nama_Produk: "TWT 12 SMA 4P", Kelompok_Kota: 1, Harga: 13700000, Jumlah_KBM: 209, Jumlah_TO: 20 }
                 ];
-                const worksheet = XLSX.utils.json_to_sheet(templateData);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
-                XLSX.writeFile(workbook, "template_database_harga.xlsx");
+                const ws = XLSX.utils.json_to_sheet(templateData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "TemplateProduk");
+                XLSX.writeFile(wb, "template_database_produk.xlsx");
             };
 
-            const handleFileUpload = (e) => {
+            const handleDownloadTemplateKota = () => {
+                const templateData = [
+                    { Nama_Kota: "Jakarta", Kelompok_Kota: 1, Tarif_KBM: 186713, Tarif_TO: 40000 }
+                ];
+                const ws = XLSX.utils.json_to_sheet(templateData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "TemplateKota");
+                XLSX.writeFile(wb, "template_database_kota_pengajar.xlsx");
+            };
+
+            // --- UPLOAD HANDLERS ---
+            const handleUploadProduk = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     try {
@@ -71,78 +91,75 @@
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
-                        if (jsonData.length === 0) {
-                            alert("File Excel kosong!");
-                            return;
-                        }
+                        if (jsonData.length === 0) { alert("File kosong!"); return; }
 
-                        let formattedData = [];
-                        jsonData.forEach((row) => {
-                            const tahun = row.Tahun_Ajaran || row.tahun_ajaran || row.TA || row.ta || row.Tahun || "";
-                            const produk = row.Nama_Produk || row.nama_produk || row.Produk || row.produk || "";
-                            
-                            if (tahun && produk) {
-                                formattedData.push({
-                                    tahun: String(tahun).trim(),
-                                    tingkat: String(row.Tingkat_Kelas || row.tingkat_kelas || row.Kelas || "12 SMA").trim(),
-                                    produk: String(produk).trim(),
-                                    kelompok: parseInt(row.Kelompok_Kota || row.kelompok_kota || row.Kelompok || 1),
-                                    harga: parseInt(String(row.Harga || row.harga || 0).replace(/\D/g, '')) || 0
-                                });
-                            } else {
-                                Object.keys(row).forEach(key => {
-                                    const matchYear = key.match(/(\d{2}\/\d{2})/);
-                                    if (matchYear) {
-                                        const detectedYear = matchYear[1];
-                                        const val = row[key];
-                                        const cleanVal = parseInt(String(val).replace(/\D/g, ''), 10);
-                                        
-                                        if (cleanVal > 0) {
-                                            let prodName = key.replace(detectedYear, "").replace("TA", "").trim();
-                                            if (!prodName || prodName.length < 3) prodName = "Produk Utama";
-                                            const kelompokVal = parseInt(row['Kelompok Kota'] || row['Kelompok'] || row['Kelompok_Kota'] || row[Object.keys(row)[0]] || 1) || 1;
-
-                                            formattedData.push({
-                                                tahun: detectedYear,
-                                                tingkat: "12 SMA",
-                                                produk: prodName,
-                                                kelompok: kelompokVal,
-                                                harga: cleanVal
-                                            });
-                                        }
-                                    }
-                                });
-                            }
-                        });
-
-                        if (formattedData.length === 0) {
-                            formattedData = jsonData.map(row => ({
-                                tahun: String(row.Tahun_Ajaran || row.tahun || "26/27"),
-                                tingkat: String(row.Tingkat_Kelas || row.tingkat || "12 SMA"),
-                                produk: String(row.Nama_Produk || row.produk || "Produk Utama"),
-                                kelompok: parseInt(row.Kelompok_Kota || row.kelompok || 1),
-                                harga: parseInt(String(row.Harga || row.harga || 0).replace(/\D/g, '')) || 0
-                            }));
-                        }
+                        const formattedData = jsonData.map(row => ({
+                            tahun: String(row.Tahun_Ajaran || row.tahun || "26/27").trim(),
+                            tingkat: String(row.Tingkat_Kelas || row.tingkat || "12 SMA").trim(),
+                            produk: String(row.Nama_Produk || row.produk || "Produk Utama").trim(),
+                            kelompok: parseInt(row.Kelompok_Kota || row.kelompok || 1),
+                            harga: parseInt(String(row.Harga || row.harga || 0).replace(/\D/g, '')) || 0,
+                            kbm: parseInt(row.Jumlah_KBM || row.kbm || 209),
+                            to: parseInt(row.Jumlah_TO || row.to || 20)
+                        }));
 
                         setDb(formattedData);
-                        alert(`Berhasil! ${formattedData.length} baris data berhasil dimuat.`);
-                    } catch (error) {
-                        alert("Gagal membaca file Excel.");
-                    }
+                        alert(`Berhasil memuat ${formattedData.length} baris data produk.`);
+                    } catch (error) { alert("Gagal membaca file Excel."); }
                 };
                 reader.readAsArrayBuffer(file);
             };
 
-            const handleResetData = () => {
-                if (confirm("Hapus semua data di sistem?")) {
-                    setDb([]);
-                    alert("Database dikosongkan.");
-                }
+            const handleUploadKota = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const dataBuffer = new Uint8Array(evt.target.result);
+                        const workbook = XLSX.read(dataBuffer, { type: 'array' });
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                        if (jsonData.length === 0) { alert("File kosong!"); return; }
+
+                        const formattedCityData = jsonData.map(row => ({
+                            kota: String(row.Nama_Kota || row.kota || "Kota Lain").trim(),
+                            kelompok: parseInt(row.Kelompok_Kota || row.kelompok || 1),
+                            tarifKBM: parseInt(String(row.Tarif_KBM || row.tarifKBM || 0).replace(/\D/g, '')) || 0,
+                            tarifTO: parseInt(String(row.Tarif_TO || row.tarifTO || 0).replace(/\D/g, '')) || 0
+                        }));
+
+                        setCityDb(formattedCityData);
+                        alert(`Berhasil memuat ${formattedCityData.length} data kota & honor pengajar.`);
+                    } catch (error) { alert("Gagal membaca file Excel kota."); }
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            const handleAutoGenerate = () => {
+                const newDrafts = {};
+                listKelompokUnik.forEach(kel => {
+                    const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === "26/27");
+                    const baseHarga = found ? found.harga : 10000000;
+                    newDrafts[kel] = Math.round(baseHarga * (1 + persenKenaikan / 100));
+                });
+                setDraft27(newDrafts);
+                alert(`Proyeksi harga berhasil digenerate naik ${persenKenaikan}%!`);
             };
 
             const listProdukUnik = [...new Set(db.map(item => item.produk))];
             const listKelompokUnik = [...new Set(db.filter(d => d.produk === selectedProdComp).map(d => d.kelompok))].sort((a, b) => a - b);
+
+            // FUNGSI MENCARI TARIF TERTINGGI PER KELOMPOK KOTA
+            const getMaxTarifByKelompok = (kelompokId) => {
+                const citiesInGroup = cityDb.filter(c => c.kelompok === kelompokId);
+                if (citiesInGroup.length === 0) return { maxKBM: 186713, maxTO: 40000 }; // Fallback default
+                
+                const maxKBM = Math.max(...citiesInGroup.map(c => c.tarifKBM));
+                const maxTO = Math.max(...citiesInGroup.map(c => c.tarifTO));
+                return { maxKBM, maxTO };
+            };
 
             const handleExportComp = () => {
                 const exportData = listKelompokUnik.map(kel => {
@@ -150,198 +167,217 @@
                         const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
                         return found ? found.harga : 0;
                     };
+                    const tarif = getMaxTarifByKelompok(kel);
                     return {
                         "Kelompok Kota": `Kelompok ${kel}`,
                         "Produk": selectedProdComp,
                         "TA 24/25": getVal("24/25"),
                         "TA 25/26": getVal("25/26"),
                         "TA 26/27": getVal("26/27"),
-                        "Proyeksi TA 27/28": draft27[kel] || 0
+                        "Proyeksi TA 27/28": draft27[kel] || 0,
+                        "Max Tarif KBM": tarif.maxKBM,
+                        "Max Tarif TO": tarif.maxTO
                     };
                 });
-
-                const worksheet = XLSX.utils.json_to_sheet(exportData);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, "Komparasi Harga");
-                XLSX.writeFile(workbook, `Komparasi_${selectedProdComp.replace(/\s+/g, '_')}.xlsx`);
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "KomparasiMargin");
+                XLSX.writeFile(wb, `Komparasi_${selectedProdComp.replace(/\s+/g, '_')}.xlsx`);
             };
 
             return (
                 <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+                    {/* HEADER & NAVIGASI 3 TAB */}
                     <div className="bg-slate-900 text-white p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                         <div>
                             <h1 className="text-2xl font-bold">Aplikasi Proyeksi & Kalkulator Margin Harga</h1>
-                            <p className="text-sm text-gray-400 mt-1">Manajemen database, komparasi, dan simulasi profitabilitas per kelas</p>
+                            <p className="text-sm text-gray-400 mt-1">Sistem manajemen database harga, honor pengajar, dan simulasi profitabilitas</p>
                         </div>
-                        <div className="flex bg-slate-800 p-1.5 rounded-xl border border-slate-700">
-                            <button 
-                                onClick={() => setActiveMenu("input")}
-                                className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeMenu === 'input' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}
-                            >
-                                📂 1. Upload & Kelola Database
+                        <div className="flex flex-wrap bg-slate-800 p-1.5 rounded-xl border border-slate-700 gap-1">
+                            <button onClick={() => setActiveMenu("input")} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${activeMenu === 'input' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}>
+                                📂 1. Database Produk
                             </button>
-                            <button 
-                                onClick={() => setActiveMenu("pembanding")}
-                                className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeMenu === 'pembanding' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}
-                            >
-                                📊 2. Tampilan Pembanding & Kalkulator
+                            <button onClick={() => setActiveMenu("kota")} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${activeMenu === 'kota' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}>
+                                🏙️ 2. Database Kota & Honor
+                            </button>
+                            <button onClick={() => setActiveMenu("pembanding")} className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${activeMenu === 'pembanding' ? 'bg-blue-600 text-white shadow' : 'text-gray-300 hover:text-white'}`}>
+                                📊 3. Kalkulator & Pembanding
                             </button>
                         </div>
                     </div>
 
                     <div className="p-8">
                         {activeMenu === 'input' ? (
+                            /* TAB 1: KELOLA DATABASE PRODUK */
                             <div className="space-y-6">
                                 <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div>
-                                        <h2 className="text-lg font-bold text-blue-900">Kelola Data Harga Massal</h2>
-                                        <p className="text-sm text-blue-700 mt-1">Download template atau upload file Excel Anda.</p>
+                                        <h2 className="text-lg font-bold text-blue-900">Upload Database Harga Produk</h2>
+                                        <p className="text-sm text-blue-700 mt-1">Kelola data harga, volume KBM, dan TO per tahun ajaran.</p>
                                     </div>
                                     <div className="flex flex-wrap gap-3">
-                                        <button onClick={handleDownloadTemplate} className="bg-white border border-blue-300 text-blue-700 hover:bg-blue-100 px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition-colors">
-                                            📥 Download Template
-                                        </button>
-                                        <label className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md transition-colors text-sm">
-                                            📁 Upload Excel / CSV
-                                            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="hidden" />
+                                        <button onClick={handleDownloadTemplateProduk} className="bg-white border border-blue-300 text-blue-700 px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm">📥 Download Template</button>
+                                        <label className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md text-sm">
+                                            📁 Upload Excel
+                                            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleUploadProduk} className="hidden" />
                                         </label>
-                                        {db.length > 0 && (
-                                            <button onClick={handleResetData} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-4 py-2.5 rounded-xl font-bold text-sm transition-colors">
-                                                🗑️ Reset
-                                            </button>
-                                        )}
+                                        {db.length > 0 && <button onClick={() => setDb([])} className="bg-red-50 text-red-600 border border-red-200 px-4 py-2.5 rounded-xl font-bold text-sm">🗑️ Reset</button>}
                                     </div>
                                 </div>
-
                                 <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm max-h-[450px] overflow-y-auto">
                                     <table className="w-full text-left border-collapse text-sm">
                                         <thead className="bg-gray-100 text-gray-700 sticky top-0">
                                             <tr>
-                                                <th className="p-3 border-b">Tahun Ajaran</th>
-                                                <th className="p-3 border-b">Tingkat Kelas</th>
-                                                <th className="p-3 border-b">Nama Produk</th>
-                                                <th className="p-3 border-b">Kelompok Kota</th>
+                                                <th className="p-3 border-b">TA</th>
+                                                <th className="p-3 border-b">Kelas</th>
+                                                <th className="p-3 border-b">Produk</th>
+                                                <th className="p-3 border-b">Kelompok</th>
                                                 <th className="p-3 border-b">Harga</th>
+                                                <th className="p-3 border-b">KBM</th>
+                                                <th className="p-3 border-b">TO</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {db.length === 0 ? (
-                                                <tr><td colSpan="5" className="p-6 text-center text-gray-400">Belum ada data.</td></tr>
-                                            ) : (
-                                                db.map((item, index) => (
-                                                    <tr key={index} className="border-b hover:bg-gray-50">
+                                            {db.length === 0 ? <tr><td colSpan="7" className="p-6 text-center text-gray-400">Belum ada data produk.</td></tr> :
+                                                db.map((item, idx) => (
+                                                    <tr key={idx} className="border-b hover:bg-gray-50">
                                                         <td className="p-3 font-bold text-blue-600">{item.tahun}</td>
                                                         <td className="p-3 text-gray-600">{item.tingkat}</td>
                                                         <td className="p-3 text-gray-900 font-medium">{item.produk}</td>
-                                                        <td className="p-3 text-gray-600">Kelompok {item.kelompok}</td>
+                                                        <td className="p-3 text-gray-600">Kel. {item.kelompok}</td>
                                                         <td className="p-3 text-gray-900 font-bold">{formatRp(item.harga)}</td>
+                                                        <td className="p-3 text-gray-600">{item.kbm} Sesi</td>
+                                                        <td className="p-3 text-gray-600">{item.to} Kali</td>
                                                     </tr>
                                                 ))
-                                            )}
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : activeMenu === 'kota' ? (
+                            /* TAB 2: DATABASE KOTA & HONOR PENGAJAR */
+                            <div className="space-y-6">
+                                <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
+                                    <div>
+                                        <h2 className="text-lg font-bold text-emerald-900">Database Kota & Honor Pengajar</h2>
+                                        <p className="text-sm text-emerald-700 mt-1">Sistem otomatis mengambil tarif <strong>tertinggi</strong> dari setiap kelompok kota untuk simulasi cost.</p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-3">
+                                        <button onClick={handleDownloadTemplateKota} className="bg-white border border-emerald-300 text-emerald-700 px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm">📥 Download Template Kota</button>
+                                        <label className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer shadow-md text-sm">
+                                            📁 Upload Excel Kota
+                                            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleUploadKota} className="hidden" />
+                                        </label>
+                                        {cityDb.length > 0 && <button onClick={() => setCityDb([])} className="bg-red-50 text-red-600 border border-red-200 px-4 py-2.5 rounded-xl font-bold text-sm">🗑️ Reset Kota</button>}
+                                    </div>
+                                </div>
+                                <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm max-h-[450px] overflow-y-auto">
+                                    <table className="w-full text-left border-collapse text-sm">
+                                        <thead className="bg-gray-100 text-gray-700 sticky top-0">
+                                            <tr>
+                                                <th className="p-3 border-b">Nama Kota</th>
+                                                <th className="p-3 border-b">Kelompok Kota</th>
+                                                <th className="p-3 border-b">Tarif KBM per Sesi</th>
+                                                <th className="p-3 border-b">Tarif TO per Sesi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {cityDb.length === 0 ? <tr><td colSpan="4" className="p-6 text-center text-gray-400">Belum ada data kota.</td></tr> :
+                                                cityDb.map((item, idx) => (
+                                                    <tr key={idx} className="border-b hover:bg-gray-50">
+                                                        <td className="p-3 font-bold text-slate-800">{item.kota}</td>
+                                                        <td className="p-3 text-blue-600 font-semibold">Kelompok {item.kelompok}</td>
+                                                        <td className="p-3 text-gray-900">{formatRp(item.tarifKBM)}</td>
+                                                        <td className="p-3 text-gray-900">{formatRp(item.tarifTO)}</td>
+                                                    </tr>
+                                                ))
+                                            }
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                         ) : (
-                            /* ================= TAMPILAN 2: PEMBANDING & KALKULATOR PROFIT ================= */
+                            /* TAB 3: PEMBANDING & KALKULATOR PROFIT */
                             <div className="space-y-8">
                                 <div className="flex flex-col md:flex-row justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-200 gap-4">
                                     <div>
-                                        <h2 className="text-lg font-bold text-slate-900">Dashboard Komparasi Harga</h2>
-                                        <p className="text-sm text-slate-600">Pilih produk untuk melihat perbandingan dan simulasi margin.</p>
+                                        <h2 className="text-lg font-bold text-slate-900">Dashboard Komparasi & Kalkulator Profit</h2>
+                                        <p className="text-sm text-slate-600">Cost KBM & TO otomatis menggunakan tarif tertinggi dari database kota.</p>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <span className="text-sm font-semibold text-gray-700">Pilih Produk:</span>
-                                        <select 
-                                            value={selectedProdComp} 
-                                            onChange={(e) => setSelectedProdComp(e.target.value)}
-                                            className="bg-white border border-gray-300 rounded-xl px-4 py-2 font-medium shadow-sm outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                        >
-                                            {listProdukUnik.map(p => (<option key={p} value={p}>{p}</option>))}
+                                        <select value={selectedProdComp} onChange={(e) => setSelectedProdComp(e.target.value)} className="bg-white border border-gray-300 rounded-xl px-4 py-2 font-medium shadow-sm outline-none text-sm">
+                                            {listProdukUnik.map(p => <option key={p} value={p}>{p}</option>)}
                                         </select>
-                                        <button onClick={handleExportComp} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-colors">
-                                            📊 Export
+                                        <button onClick={handleExportComp} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm">📊 Export</button>
+                                    </div>
+                                </div>
+
+                                {/* PANEL GENERATOR */}
+                                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
+                                    <div className="text-sm text-indigo-900">
+                                        <span className="font-bold">⚡ Auto-Generate Harga:</span> Naikkan seluruh harga proyeksi secara massal berdasarkan persentase.
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <input type="number" value={persenKenaikan} onChange={(e) => setPersenKenaikan(parseFloat(e.target.value) || 0)} className="w-20 bg-white px-3 py-1.5 border border-indigo-200 rounded-xl text-sm text-center font-bold" />
+                                        <span className="text-sm font-bold text-indigo-900">%</span>
+                                        <button onClick={handleAutoGenerate} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm">
+                                            🚀 Generate Semua Harga
                                         </button>
                                     </div>
                                 </div>
 
-                                {/* PANEL PENGATURAN KALKULATOR (Siswa, Diskon, Cost) */}
+                                {/* PENGATURAN KALKULATOR */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-blue-50/60 p-6 rounded-2xl border border-blue-100">
-                                    {/* 1. Jumlah Siswa */}
                                     <div>
-                                        <label className="block text-sm font-bold text-blue-900 mb-2">👥 1. Simulasi Jumlah Siswa</label>
-                                        <input 
-                                            type="number" 
-                                            min="1" 
-                                            value={jumlahSiswa} 
-                                            onChange={(e) => setjumlahSiswa(parseInt(e.target.value) || 0)}
-                                            className="w-full bg-white px-4 py-2 border border-blue-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
-                                        />
-                                        <p className="text-xs text-blue-700 mt-1">Total siswa per kelas yang mendaftar.</p>
+                                        <label className="block text-sm font-bold text-blue-900 mb-2">👥 1. Jumlah Siswa per Kelas</label>
+                                        <input type="number" min="1" value={jumlahSiswa} onChange={(e) => setJumlahSiswa(parseInt(e.target.value) || 0)} className="w-full bg-white px-4 py-2 border border-blue-200 rounded-xl outline-none font-semibold" />
                                     </div>
-
-                                    {/* 2. Pengaturan Diskon (Maksimal 3) */}
                                     <div>
-                                        <label className="block text-sm font-bold text-blue-900 mb-2">🏷️ 2. Atur Diskon (Max 3)</label>
+                                        <label className="block text-sm font-bold text-blue-900 mb-2">🏷️ 2. Diskon (Max 3 Lapis)</label>
                                         <div className="space-y-2">
                                             {diskonList.map((disc, idx) => (
                                                 <div key={idx} className="flex gap-2">
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder={`Diskon ${idx+1}`}
-                                                        value={disc.value || ''}
-                                                        onChange={(e) => {
-                                                            const val = parseFloat(e.target.value) || 0;
-                                                            const updated = [...diskonList];
-                                                            updated[idx].value = val;
-                                                            setDiskonList(updated);
-                                                        }}
-                                                        className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg text-sm outline-none"
-                                                    />
-                                                    <select 
-                                                        value={disc.type}
-                                                        onChange={(e) => {
-                                                            const updated = [...diskonList];
-                                                            updated[idx].type = e.target.value;
-                                                            setDiskonList(updated);
-                                                        }}
-                                                        className="bg-white border border-blue-200 rounded-lg px-2 text-sm"
-                                                    >
-                                                        <option value="%">%</option>
-                                                        <option value="Rp">Rp</option>
+                                                    <input type="number" placeholder={`Diskon ${idx+1}`} value={disc.value || ''} onChange={(e) => {
+                                                        const val = parseFloat(e.target.value) || 0;
+                                                        const updated = [...diskonList]; updated[idx].value = val; setDiskonList(updated);
+                                                    }} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg text-sm outline-none" />
+                                                    <select value={disc.type} onChange={(e) => {
+                                                        const updated = [...diskonList]; updated[idx].type = e.target.value; setDiskonList(updated);
+                                                    }} className="bg-white border border-blue-200 rounded-lg px-2 text-sm">
+                                                        <option value="%">%</option><option value="Rp">Rp</option>
                                                     </select>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-
-                                    {/* 3. Pengaturan Biaya (Cost) */}
                                     <div>
-                                        <label className="block text-sm font-bold text-blue-900 mb-2">💸 3. Pengaturan Biaya (Cost)</label>
+                                        <label className="block text-sm font-bold text-blue-900 mb-2">💸 3. Rincian Cost (Biaya)</label>
                                         <div className="space-y-2 text-sm">
                                             <div>
-                                                <span className="text-xs text-blue-800 block">Biaya per Siswa (Modul/Snack):</span>
-                                                <input 
-                                                    type="text" 
-                                                    value={formatRp(biayaPerSiswa).replace('Rp', '').trim()}
-                                                    onChange={(e) => setBiayaPerSiswa(parseInt(e.target.value.replace(/\D/g, '')) || 0)}
-                                                    className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none"
-                                                />
+                                                <span className="text-xs text-blue-800 block font-medium">Biaya per Siswa:</span>
+                                                <input type="text" value={formatRp(biayaSiswaTotal).replace('Rp', '').trim()} onChange={(e) => setBiayaSiswaTotal(parseInt(e.target.value.replace(/\D/g, '')) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs" />
                                             </div>
                                             <div>
-                                                <span className="text-xs text-blue-800 block">Biaya Tetap per Kelas (Sewa/Guru):</span>
-                                                <input 
-                                                    type="text" 
-                                                    value={formatRp(biayaPerKelas).replace('Rp', '').trim()}
-                                                    onChange={(e) => setBiayaPerKelas(parseInt(e.target.value.replace(/\D/g, '')) || 0)}
-                                                    className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none"
-                                                />
+                                                <span className="text-xs text-blue-800 block font-medium">Biaya Tetap Kelas (Gedung/Listrik):</span>
+                                                <input type="text" value={formatRp(biayaTetapKelas).replace('Rp', '').trim()} onChange={(e) => setBiayaTetapKelas(parseInt(e.target.value.replace(/\D/g, '')) || 0)} className="w-full bg-white px-3 py-1.5 border border-blue-200 rounded-lg outline-none text-xs" />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 pt-1">
+                                                <div>
+                                                    <span className="text-[10px] text-blue-800 block">Sesi KBM:</span>
+                                                    <input type="number" value={customKBM} onChange={(e) => setCustomKBM(parseInt(e.target.value) || 0)} className="w-full bg-white px-2 py-1 border border-blue-200 rounded text-xs" />
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] text-blue-800 block">Sesi TO:</span>
+                                                    <input type="number" value={customTO} onChange={(e) => setCustomTO(parseInt(e.target.value) || 0)} className="w-full bg-white px-2 py-1 border border-blue-200 rounded text-xs" />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* TABEL UTAMA KOMPARASI + KALKULATOR PROFIT */}
+                                {/* TABEL UTAMA */}
                                 <div className="overflow-x-auto border border-gray-200 rounded-2xl shadow-sm">
                                     <table className="w-full text-left border-collapse text-sm">
                                         <thead className="bg-gray-100 text-gray-700">
@@ -350,80 +386,69 @@
                                                 <th className="p-4 border-b">TA 24/25</th>
                                                 <th className="p-4 border-b">TA 25/26</th>
                                                 <th className="p-4 border-b">TA 26/27</th>
-                                                <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA 27/28 (Input)</th>
-                                                <th className="p-4 border-b bg-emerald-50 text-emerald-900">Simulasi Nett Income</th>
-                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost</th>
-                                                <th className="p-4 border-b bg-purple-50 text-purple-900">Profit Margin (%)</th>
+                                                <th className="p-4 border-b bg-blue-50 text-blue-900">Proyeksi TA 27/28</th>
+                                                <th className="p-4 border-b bg-emerald-50 text-emerald-900">Nett Income</th>
+                                                <th className="p-4 border-b bg-amber-50 text-amber-900">Total Cost (Auto Tarif Max)</th>
+                                                <th className="p-4 border-b bg-purple-50 text-purple-900">Profit Margin</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {listKelompokUnik.length === 0 ? (
-                                                <tr><td colSpan="8" className="p-6 text-center text-gray-400">Tidak ada data untuk produk ini.</td></tr>
-                                            ) : (
+                                            {listKelompokUnik.length === 0 ? <tr><td colSpan="8" className="p-6 text-center text-gray-400">Tidak ada data untuk produk ini.</td></tr> :
                                                 listKelompokUnik.map((kel) => {
-                                                    const getHargaByTA = (ta) => {
-                                                        const found = db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
-                                                        return found ? found.harga : 0;
-                                                    };
-
-                                                    // Harga acuan untuk kalkulasi adalah Proyeksi TA 27/28 (jika diisi, jika kosong pakai TA 26/27)
-                                                    const hargaDasar = draft27[kel] || getHargaByTA("26/27") || 0;
+                                                    const getDataByTA = (ta) => db.find(d => d.produk === selectedProdComp && d.kelompok === kel && d.tahun === ta);
                                                     
-                                                    // Gross Income = Harga * Jumlah Siswa
-                                                    const grossIncome = hargaDasar * jumlahSiswa;
+                                                    const d24 = getDataByTA("24/25");
+                                                    const d25 = getDataByTA("25/26");
+                                                    const d26 = getDataByTA("26/27");
 
-                                                    // Hitung Diskon Berlapis (Max 3)
-                                                    let totalDiskonNominal = 0;
+                                                    const hargaAcuan = draft27[kel] || (d26 ? d26.harga : 0);
+                                                    const grossIncome = hargaAcuan * jumlahSiswa;
+
+                                                    let totalDiskon = 0;
                                                     diskonList.forEach(disc => {
-                                                        if (disc.type === '%') {
-                                                            totalDiskonNominal += grossIncome * (disc.value / 100);
-                                                        } else {
-                                                            totalDiskonNominal += disc.value * jumlahSiswa;
-                                                        }
+                                                        if (disc.type === '%') totalDiskon += grossIncome * (disc.value / 100);
+                                                        else totalDiskon += disc.value * jumlahSiswa;
                                                     });
+                                                    const nettIncome = Math.max(0, grossIncome - totalDiskon);
 
-                                                    const nettIncome = Math.max(0, grossIncome - totalDiskonNominal);
-
-                                                    // Hitung Total Cost = (Biaya per Siswa * Jumlah Siswa) + Biaya per Kelas
-                                                    const totalCost = (biayaPerSiswa * jumlahSiswa) + biayaPerKelas;
-
-                                                    // Profit & Margin
+                                                    // AMBIL TARIF TERTINGGI OTOMATIS BERDASARKAN DATABASE KOTA TAB 2
+                                                    const maxTarif = getMaxTarifByKelompok(kel);
+                                                    const totalCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (customKBM * maxTarif.maxKBM) + (customTO * maxTarif.maxTO);
+                                                    
                                                     const grossProfit = nettIncome - totalCost;
                                                     const profitMargin = nettIncome > 0 ? (grossProfit / nettIncome) * 100 : 0;
 
                                                     return (
                                                         <tr key={kel} className="border-b hover:bg-gray-50">
                                                             <td className="p-4 font-bold text-gray-800">Kelompok {kel}</td>
-                                                            <td className="p-4 text-gray-600">{formatRp(getHargaByTA("24/25"))}</td>
-                                                            <td className="p-4 text-gray-600">{formatRp(getHargaByTA("25/26"))}</td>
-                                                            <td className="p-4 text-gray-900 font-semibold">{formatRp(getHargaByTA("26/27"))}</td>
+                                                            <td className="p-4 text-xs text-gray-600">{d24 ? `${formatRp(d24.harga)} / ${d24.kbm}K` : '-'}</td>
+                                                            <td className="p-4 text-xs text-gray-600">{d25 ? `${formatRp(d25.harga)} / ${d25.kbm}K` : '-'}</td>
+                                                            <td className="p-4 text-xs text-gray-900 font-semibold">{d26 ? `${formatRp(d26.harga)} / ${d26.kbm}K` : '-'}</td>
                                                             <td className="p-4 bg-blue-50/50">
                                                                 <input 
-                                                                    type="text"
-                                                                    placeholder="Harga baru..."
+                                                                    type="text" 
+                                                                    placeholder="Harga baru..." 
                                                                     value={draft27[kel] ? formatRp(draft27[kel]).replace('Rp', '').trim() : ''}
                                                                     onChange={(e) => {
                                                                         const val = parseInt(e.target.value.replace(/\D/g, ''), 10) || 0;
                                                                         setDraft27({...draft27, [kel]: val});
                                                                     }}
-                                                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none text-sm"
                                                                 />
                                                             </td>
-                                                            <td className="p-4 bg-emerald-50/40 font-bold text-emerald-700">
-                                                                {formatRp(nettIncome)}
-                                                            </td>
-                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700">
+                                                            <td className="p-4 bg-emerald-50/40 font-bold text-emerald-700 text-xs">{formatRp(nettIncome)}</td>
+                                                            <td className="p-4 bg-amber-50/40 font-semibold text-amber-700 text-xs" title={`Gunakan Tarif KBM Max: ${formatRp(maxTarif.maxKBM)}, TO Max: ${formatRp(maxTarif.maxTO)}`}>
                                                                 {formatRp(totalCost)}
                                                             </td>
                                                             <td className="p-4 bg-purple-50/40 font-bold text-purple-700">
-                                                                <span className={`px-2.5 py-1 rounded-lg text-xs ${profitMargin >= 30 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                                <span className={`px-2 py-1 rounded-lg text-xs ${profitMargin >= 30 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                                                     {profitMargin.toFixed(1)}%
                                                                 </span>
                                                             </td>
                                                         </tr>
                                                     );
                                                 })
-                                            )}
+                                            }
                                         </tbody>
                                     </table>
                                 </div>
