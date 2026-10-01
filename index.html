@@ -51,7 +51,6 @@
             const [biayaSiswaTotal, setBiayaSiswaTotal] = useState(3008475);
             const [biayaTetapKelas, setBiayaTetapKelas] = useState(5738252);
             
-            // VOLUME KBM & TO: Referensi TA Sebelumnya (26/27) vs Proyeksi TA Baru (27/28)
             const [kbmPrev, setKbmPrev] = useState(209);
             const [toPrev, setToPrev] = useState(20);
             const [kbmTarget, setKbmTarget] = useState(220);
@@ -59,7 +58,6 @@
 
             const [persenKenaikan, setPersenKenaikan] = useState(5);
 
-            // Hitung Persen Kenaikan Volume Otomatis untuk Saran
             const persenKenaikanKBM = kbmPrev > 0 ? (((kbmTarget - kbmPrev) / kbmPrev) * 100).toFixed(1) : 0;
             const persenKenaikanTO = toPrev > 0 ? (((toTarget - toPrev) / toPrev) * 100).toFixed(1) : 0;
 
@@ -81,6 +79,16 @@
                 XLSX.writeFile(wb, "template_database_kota_pengajar.xlsx");
             };
 
+            // Fungsi pembersih format tahun ajaran agar seragam (misal "2026/2027" atau "TA 26/27" jadi "26/27")
+            const cleanYear = (rawYear) => {
+                const str = String(rawYear).trim();
+                const match = str.match(/(\d{2}\/\d{2})/);
+                if (match) return match[1];
+                const match4 = str.match(/20(\d{2})\/20(\d{2})/);
+                if (match4) return `${match4[1]}/${match4[2]}`;
+                return str;
+            };
+
             const handleUploadProduk = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -94,7 +102,7 @@
                         if (jsonData.length === 0) { alert("File kosong!"); return; }
 
                         const formattedData = jsonData.map(row => ({
-                            tahun: String(row.Tahun_Ajaran || row.tahun || "26/27").trim(),
+                            tahun: cleanYear(row.Tahun_Ajaran || row.tahun || row.TA || "26/27"),
                             tingkat: String(row.Tingkat_Kelas || row.tingkat || "12 SMA").trim(),
                             produk: String(row.Nama_Produk || row.produk || "Produk Utama").trim(),
                             kelompok: parseInt(row.Kelompok_Kota || row.kelompok || 1),
@@ -102,9 +110,20 @@
                             kbm: parseInt(row.Jumlah_KBM || row.kbm || 209),
                             to: parseInt(row.Jumlah_TO || row.to || 20)
                         }));
+
                         setDb(formattedData);
-                        alert(`Berhasil memuat ${formattedData.length} baris data produk.`);
-                    } catch (error) { alert("Gagal membaca file Excel."); }
+                        
+                        // Otomatis pilih produk pertama yang ada di file baru agar langsung muncul di tab kalkulator
+                        const products = [...new Set(formattedData.map(d => d.produk))];
+                        if (products.length > 0) {
+                            setSelectedProdComp(products[0]);
+                        }
+
+                        alert(`Berhasil memuat ${formattedData.length} baris data produk! Silakan cek Tab 3.`);
+                    } catch (error) { 
+                        console.error(error);
+                        alert("Gagal membaca file Excel."); 
+                    }
                 };
                 reader.readAsArrayBuffer(file);
             };
@@ -305,7 +324,6 @@
                                     </div>
                                 </div>
 
-                                {/* PANEL ANALISIS VOLUME & SARAN KENAIKAN */}
                                 <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex flex-col lg:flex-row justify-between items-center gap-6">
                                     <div>
                                         <h3 className="text-sm font-bold text-amber-900 mb-1">📈 Analisis Volume & Saran Kenaikan (TA 26/27 vs Proyeksi 27/28)</h3>
@@ -329,10 +347,9 @@
                                     </div>
                                 </div>
 
-                                {/* PANEL GENERATOR HARGA */}
                                 <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div className="text-sm text-indigo-900">
-                                        <span className="font-bold">⚡ Auto-Generate Harga:</span> Naikkan seluruh harga proyeksi secara massal berdasarkan persentase. (Bisa disesuaikan dengan % kenaikan KBM/TO di atas).
+                                        <span className="font-bold">⚡ Auto-Generate Harga:</span> Naikkan seluruh harga proyeksi secara massal berdasarkan persentase.
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <input type="number" value={persenKenaikan} onChange={(e) => setPersenKenaikan(parseFloat(e.target.value) || 0)} className="w-20 bg-white px-3 py-1.5 border border-indigo-200 rounded-xl text-sm text-center font-bold" />
@@ -343,7 +360,6 @@
                                     </div>
                                 </div>
 
-                                {/* PENGATURAN KALKULATOR */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-blue-50/60 p-6 rounded-2xl border border-blue-100">
                                     <div>
                                         <label className="block text-sm font-bold text-blue-900 mb-2">👥 1. Jumlah Siswa per Kelas</label>
@@ -416,7 +432,6 @@
                                                     const nettIncome = Math.max(0, grossIncome - totalDiskon);
 
                                                     const maxTarif = getMaxTarifByKelompok(kel);
-                                                    // Cost KBM & TO dihitung berdasarkan TARGET Sesi yang diinput di atas
                                                     const totalCost = (biayaSiswaTotal * jumlahSiswa) + biayaTetapKelas + (kbmTarget * maxTarif.maxKBM) + (toTarget * maxTarif.maxTO);
                                                     
                                                     const grossProfit = nettIncome - totalCost;
